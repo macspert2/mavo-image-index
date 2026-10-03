@@ -94,6 +94,10 @@ class MII_Results {
 		add_filter( 'wpseo_opengraph_url', [ __CLASS__, 'canonical' ] );
 		add_filter( 'get_canonical_url', [ __CLASS__, 'canonical' ] );
 		add_filter( 'pll_translation_url', [ __CLASS__, 'translation_url' ], 10, 2 );
+
+		// mavo-for-you's "Pour vous" block appends itself to eligible pages;
+		// this page is a browse page of its own, not reading material.
+		add_filter( 'mavo_for_you_show_block', [ __CLASS__, 'hide_for_you' ], 10, 2 );
 	}
 
 	/* ------------------------------------------------------------------ URLs */
@@ -458,25 +462,43 @@ class MII_Results {
 	}
 
 	/**
-	 * The bare results page: the curated browse rows, then every concept.
+	 * The bare results page: the curated browse rows, then the site's hero
+	 * buttons — nothing else (user's decision, 2026-10-03).
 	 *
 	 * Rows are the theme's .mv-shelf (mv-tiles.css, arrows from its
 	 * js/mv-shelf.js) — the same row as mavo-for-you's /pour-vous/ page, but
 	 * server-rendered and the same for every visitor, so this page is cached
 	 * and indexed like any other. Each tile is one article, shown with the
 	 * photo of it that matches the row, not its featured image.
+	 *
+	 * The buttons are the home page hero's, owned by the theme and asked for
+	 * through mavo_hero_cta_row; without an answer there are simply none.
+	 * With no rows configured the page falls back to listing every concept.
 	 */
 	public static function render_index( string $lang ): string {
 		$rows = self::render_rows( $lang );
-		$all  = self::render_concept_list( $lang );
 
 		if ( '' === $rows ) {
-			return $all;
+			return self::render_concept_list( $lang );
 		}
 
+		/** The home page hero's call-to-action buttons, in a language; '' for none. */
+		$cta = trim( (string) apply_filters( 'mavo_hero_cta_row', '', $lang ) );
+
 		return '<div class="mavo-image-results mavo-image-results--browse">' . $rows
-			. '<h2 class="mavo-image-results__all-title">' . esc_html( self::text( 'all', $lang ) ) . '</h2>'
-			. $all . '</div>';
+			. ( '' !== $cta ? '<div class="mavo-image-results__cta">' . $cta . '</div>' : '' )
+			. '</div>';
+	}
+
+	/** No "Pour vous" block on the results page, in any language. */
+	public static function hide_for_you( $show, $post_id ) {
+		foreach ( MII_Lang::languages() as $lang ) {
+			if ( (int) $post_id === self::page_id( $lang ) ) {
+				return false;
+			}
+		}
+
+		return $show;
 	}
 
 	/** @return string[] The curated row concepts, in order. */

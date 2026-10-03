@@ -9,5 +9,8 @@
 .mavo-image-results__label { margin-right: .25rem; font-weight: 700; color: var(--mv-color-warm, #886353); }
 .mavo-image-results__pages { display: flex; flex-wrap: wrap; gap: 1em; justify-content: center; align-items: center; margin: 0 0 1.5em; }
 
-/* Browse page: rows are the theme's .mv-shelf; this only spaces the list below. */
-.mavo-image-results__all-title { margin-top: 1em; }
+/* Browse page: rows are the theme's .mv-shelf; the buttons below them are the
+   home hero's .mv-button (mv-custom.css). Their row layout lives in mv-home.css,
+   which only landing pages load, so it is mirrored here for this one wrapper. */
+.mavo-image-results__cta { margin: 2.5em 0 1em; }
+.mavo-image-results__cta .mv-hero__cta-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }

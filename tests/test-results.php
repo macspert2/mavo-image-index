@@ -249,10 +249,21 @@ same( 'one tile per article', [ '100', '101', '102', '103', '105' ], $sorted );
 same( 'featured-only fallback last', '102', end( $links[1] ) );
 check( 'tiles in slides', 5 === substr_count( $track[0], '<li class="mv-shelf__slide"><div class="mv-tile mv-tile--media' ) );
 check( 'theme arrows enqueued', in_array( 'mv-shelf', $GLOBALS['MOCK_SCRIPTS'], true ) );
-check( 'full concept list follows', str_contains( $html, '<h2 class="mavo-image-results__all-title">Toutes les thématiques</h2>' ) && str_contains( $html, 'mv-tile-grid--compact' ) );
+check( 'no concept list on the browse page', ! str_contains( $html, 'mv-tile-grid--compact' ) && ! str_contains( $html, 'Toutes les thématiques' ) );
+check( 'no buttons without the theme', ! str_contains( $html, 'mavo-image-results__cta' ) );
+
+add_filter( 'mavo_hero_cta_row', static fn( $html, $lang ) => '<div class="mv-hero__cta-row"><a class="mv-button" href="#">' . $lang . '</a></div>', 10, 2 );
+check( 'hero buttons after the rows, in the page language', str_ends_with( MII_Results::shortcode( [] ), '</section><div class="mavo-image-results__cta"><div class="mv-hero__cta-row"><a class="mv-button" href="#">fr</a></div></div></div>' ) );
+remove_all_filters( 'mavo_hero_cta_row' );
+
+same( 'For You block hidden on the results page', false, MII_Results::hide_for_you( true, 50 ) );
+same( '… and on its translations', false, MII_Results::hide_for_you( true, 51 ) );
+same( 'but not elsewhere', true, MII_Results::hide_for_you( true, 101 ) );
 
 visit( 51, '', 0, 'en' );
-same( 'a language without enough articles gets no row, just the list', 0, substr_count( MII_Results::shortcode( [] ), 'mv-shelf' ) );
+$html = MII_Results::shortcode( [] );
+same( 'a language without enough articles gets no row', 0, substr_count( $html, 'mv-shelf' ) );
+check( '… and falls back to the concept list', str_contains( $html, 'mv-tile-grid--compact' ) );
 
 add_filter( 'mavo_image_results_row_min', static fn() => 1 );
 visit( 50 );

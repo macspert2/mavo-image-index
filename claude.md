@@ -151,10 +151,16 @@ an overlay or a separate consumer plugin.
 - The bare page (no concept) is a browse page (user's decision,
   2026-10-03): the concepts listed in Tools → Image Index → *Browse rows*, in
   that order, each as a row of up to 12 articles — one tile per article, with
-  its photo matching the row rather than its featured image — then the full
-  concept list. A row with fewer than 4 articles in a language is skipped in
-  that language (`mavo_image_results_row_min`). Server-rendered and identical
-  for everyone, so cached and indexable, unlike /pour-vous/.
+  its photo matching the row rather than its featured image — then the home
+  page hero's three buttons, and nothing else: no "Pour vous" block (hidden
+  through mavo-for-you's `mavo_for_you_show_block`) and no concept list (both
+  removed at the user's request, 2026-10-03). The buttons belong to the theme
+  (`inc/mv-hero-cta.php`, `mv_hero_cta_row()`), asked for through the
+  `mavo_hero_cta_row` filter; without an answer none are printed. With no rows
+  configured the page falls back to the concept list. A row with fewer than 4
+  articles in a language is skipped in that language
+  (`mavo_image_results_row_min`). Server-rendered and identical for everyone,
+  so cached and indexable, unlike /pour-vous/.
 - Rows are the theme's **`.mv-shelf`** component (CSS in `mv-tiles.css`,
   arrows in the theme's `js/mv-shelf.js`, registered as `mv-shelf` and
   enqueued here only when rows render). It was moved out of mavo-for-you's
