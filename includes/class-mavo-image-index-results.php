@@ -49,9 +49,8 @@ class MII_Results {
 	const PER_ARTICLE  = 2;
 	const POOL         = 100;
 
-	/** A browse row: up to this many articles, from this many candidate photos… */
+	/** A browse row: up to this many articles… */
 	const ROW_TILES    = 12;
-	const ROW_POOL     = 48;
 
 	/** …and none at all with fewer than this many, in that language. */
 	const ROW_MIN      = 4;
@@ -529,13 +528,11 @@ class MII_Results {
 		$out = '';
 
 		foreach ( self::row_concepts() as $concept ) {
-			$tiles = self::tiles( $concept, $lang, 1, self::ROW_POOL );
+			$tiles = self::row_tiles( $concept, $lang, self::ROW_TILES, $min );
 
-			if ( count( $tiles ) < $min ) {
-				continue;
+			if ( $tiles ) {
+				$out .= self::render_row( $concept, $lang, $tiles );
 			}
-
-			$out .= self::render_row( $concept, $lang, array_slice( $tiles, 0, self::ROW_TILES ) );
 		}
 
 		if ( '' !== $out && wp_script_is( 'mv-shelf', 'registered' ) ) {
@@ -543,6 +540,84 @@ class MII_Results {
 		}
 
 		return $out;
+	}
+
+	/**
+	 * A browse row: the most popular articles using a photo of the concept,
+	 * each with that photo.
+	 *
+	 * Every matching article, from one grouped query over the index — not the
+	 * first page of an image search, which ranks photos and would miss a
+	 * popular article whose matching photo ranks low. Articles are ordered by
+	 * MII_Popularity (views in the same month last year, summed over the
+	 * translation group; then the rolling 90-day views; then newest photo).
+	 *
+	 * Per article, the photo is one that is not that article's featured image
+	 * when there is one, strongest match first; articles whose only match is
+	 * their featured image follow all the others.
+	 *
+	 * @return array<int,array{image:array,post_id:int}> [] when fewer than $min articles match
+	 */
+	public static function row_tiles( string $concept, string $lang, int $limit = self::ROW_TILES, int $min = 1 ): array {
+		global $wpdb;
+
+		$rows = $wpdb->get_results( $wpdb->prepare(
+			'SELECT u.post_id, u.attachment_id,
+			        MAX(CASE WHEN u.role = \'featured\' THEN 1 ELSE 0 END) AS featured,
+			        MAX(c.confidence) AS confidence
+			   FROM ' . MII_DB::usage() . ' u
+			   JOIN ' . MII_DB::concepts() . ' c ON c.attachment_id = u.attachment_id AND c.concept = %s
+			   JOIN ' . MII_DB::items() . ' i ON i.attachment_id = u.attachment_id
+			  WHERE u.lang = %s
+			  GROUP BY u.post_id, u.attachment_id',
+			$concept,
+			$lang
+		), ARRAY_A );
+
+		/** Whether an article's featured image may stand in when it has no other match. */
+		$fallback = (bool) apply_filters( 'mavo_image_results_featured_fallback', true, $concept, $lang );
+		$best     = []; // post_id => [ attachment_id, featured, confidence ]
+
+		foreach ( (array) $rows as $row ) {
+			$post_id   = (int) $row['post_id'];
+			$candidate = [ (int) $row['attachment_id'], (int) $row['featured'], (float) $row['confidence'] ];
+
+			if ( $candidate[1] && ! $fallback ) {
+				continue;
+			}
+
+			$have = $best[ $post_id ] ?? null;
+
+			// Not featured beats featured; then stronger match; then newer upload.
+			if ( ! $have || [ -$candidate[1], $candidate[2], $candidate[0] ] > [ -$have[1], $have[2], $have[0] ] ) {
+				$best[ $post_id ] = $candidate;
+			}
+		}
+
+		if ( count( $best ) < max( 1, $min ) ) {
+			return [];
+		}
+
+		$pop = MII_Popularity::for_posts( array_keys( $best ) );
+
+		uksort( $best, static function ( $a, $b ) use ( $best, $pop ) {
+			return [ $best[ $a ][1], -( $pop[ $a ]['season'] ?? 0 ), -( $pop[ $a ]['recent'] ?? 0 ), -$best[ $a ][0] ]
+				<=> [ $best[ $b ][1], -( $pop[ $b ]['season'] ?? 0 ), -( $pop[ $b ]['recent'] ?? 0 ), -$best[ $b ][0] ];
+		} );
+
+		$best   = array_slice( $best, 0, $limit, true );
+		$images = MII_Images::get_many( array_column( $best, 0 ), [ 'lang' => $lang ] );
+		$tiles  = [];
+
+		_prime_post_caches( array_keys( $best ), false, false );
+
+		foreach ( $best as $post_id => [ $attachment_id ] ) {
+			if ( isset( $images[ $attachment_id ] ) ) {
+				$tiles[] = [ 'image' => $images[ $attachment_id ], 'post_id' => $post_id ];
+			}
+		}
+
+		return $tiles;
 	}
 
 	private static function render_row( string $concept, string $lang, array $tiles ): string {

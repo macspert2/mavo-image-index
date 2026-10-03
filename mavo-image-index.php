@@ -32,6 +32,7 @@ require_once MII_PLUGIN_DIR . 'includes/class-mavo-image-index-status.php';
 require_once MII_PLUGIN_DIR . 'includes/class-mavo-image-index-rebuild.php';
 require_once MII_PLUGIN_DIR . 'includes/class-mavo-image-index-sync.php';
 require_once MII_PLUGIN_DIR . 'includes/class-mavo-image-index-shortcode.php';
+require_once MII_PLUGIN_DIR . 'includes/class-mavo-image-index-popularity.php';
 require_once MII_PLUGIN_DIR . 'includes/class-mavo-image-index-results.php';
 require_once MII_PLUGIN_DIR . 'includes/api.php';
 

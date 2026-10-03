@@ -60,7 +60,7 @@ class Test_WPDB {
 			CREATE INDEX wp_postmeta_meta_key ON wp_postmeta ( meta_key );
 			CREATE INDEX wp_posts_type ON wp_posts ( post_type, post_status );
 			CREATE TABLE wp_terms ( term_id INTEGER PRIMARY KEY, name TEXT, slug TEXT );
-			CREATE TABLE wp_term_taxonomy ( term_taxonomy_id INTEGER PRIMARY KEY, term_id INTEGER, taxonomy TEXT );
+			CREATE TABLE wp_term_taxonomy ( term_taxonomy_id INTEGER PRIMARY KEY, term_id INTEGER, taxonomy TEXT, description TEXT DEFAULT '' );
 			CREATE TABLE wp_term_relationships ( object_id INTEGER, term_taxonomy_id INTEGER );
 			CREATE TABLE wp_geo_mashup_locations ( id INTEGER PRIMARY KEY, lat REAL, lng REAL );
 			CREATE TABLE wp_geo_mashup_location_relationships ( object_name TEXT, object_id INTEGER, location_id INTEGER );
@@ -321,6 +321,7 @@ function get_terms( $args ) {
 	return array_map( static fn( $r ) => (object) $r, $wpdb->get_results( "SELECT term_id, name FROM wp_terms WHERE term_id IN ($ids)", ARRAY_A ) );
 }
 
+function maybe_unserialize( $v ) { return is_string( $v ) && ( $u = @unserialize( $v ) ) !== false ? $u : $v; }
 function wp_unslash( $v ) { return is_string( $v ) ? stripslashes( $v ) : $v; }
 function delete_option( $k ) { unset( $GLOBALS['MOCK_OPTIONS'][ $k ] ); return true; }
 function remove_accents( $s ) { return strtr( (string) $s, [ 'é'=>'e','è'=>'e','ê'=>'e','ë'=>'e','à'=>'a','â'=>'a','ù'=>'u','û'=>'u','ô'=>'o','î'=>'i','ï'=>'i','ç'=>'c','á'=>'a','í'=>'i','ó'=>'o','ú'=>'u' ] ); }
@@ -375,6 +376,7 @@ require MII_PLUGIN_DIR . 'includes/class-mavo-image-index-status.php';
 require MII_PLUGIN_DIR . 'includes/class-mavo-image-index-rebuild.php';
 require MII_PLUGIN_DIR . 'includes/class-mavo-image-index-sync.php';
 require MII_PLUGIN_DIR . 'includes/class-mavo-image-index-shortcode.php';
+require MII_PLUGIN_DIR . 'includes/class-mavo-image-index-popularity.php';
 require MII_PLUGIN_DIR . 'includes/class-mavo-image-index-results.php';
 require MII_PLUGIN_DIR . 'includes/api.php';
 

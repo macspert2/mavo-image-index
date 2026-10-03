@@ -28,6 +28,7 @@ agent.md**. Consumer documentation is in `README.md`.
 | `includes/class-mavo-image-index-sync.php` | `MII_Sync`: incremental hooks, shutdown flush, cron overflow |
 | `includes/class-mavo-image-index-cache.php` | `MII_Cache`: request + object cache under a generation number |
 | `includes/class-mavo-image-index-shortcode.php` | `[mavo_image_more]` |
+| `includes/class-mavo-image-index-popularity.php` | `MII_Popularity`: seasonal + recent views per article, for row order |
 | `includes/class-mavo-image-index-results.php` | `MII_Results`: the results page, its URLs, rewrite rules, SEO filters |
 | `includes/class-mavo-image-index-admin.php` | Tools → Image Index (admin only) |
 | `includes/class-mavo-image-index-cli.php` | `wp mavo-image-index` (WP-CLI only) |
@@ -161,6 +162,15 @@ an overlay or a separate consumer plugin.
   articles in a language is skipped in that language
   (`mavo_image_results_row_min`). Server-rendered and identical for everyone,
   so cached and indexable, unlike /pour-vous/.
+- Row order (user's request, 2026-10-03): every article in the language using
+  a photo of the concept (one grouped query, not the first page of an image
+  search), ordered by `MII_Popularity` — views in the same month last year
+  from `wp_rpp_monthly_snapshots` (recent-post-popularity), **summed over the
+  Polylang translation group**, because EN/DE tracking is under a year old and
+  their own last-year rows are empty; then the rolling 90-day `views` meta;
+  then the newest photo. Featured-only articles still come last. The stats
+  table is checked for, not assumed. The concept grid pages
+  (`/images/eaux-turquoise/`) keep image-relevance order.
 - Rows are the theme's **`.mv-shelf`** component (CSS in `mv-tiles.css`,
   arrows in the theme's `js/mv-shelf.js`, registered as `mv-shelf` and
   enqueued here only when rows render). It was moved out of mavo-for-you's

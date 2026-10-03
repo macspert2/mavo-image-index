@@ -245,9 +245,42 @@ preg_match( '#<ul class="mv-shelf__track".*?</ul>#s', $html, $track );
 preg_match_all( '#mv-tile__link" href="https://example.test/\?p=(\d+)"#', $track[0], $links );
 $sorted = $links[1];
 sort( $sorted );
-same( 'one tile per article', [ '100', '101', '102', '103', '105' ], $sorted );
-same( 'featured-only fallback last', '102', end( $links[1] ) );
-check( 'tiles in slides', 5 === substr_count( $track[0], '<li class="mv-shelf__slide"><div class="mv-tile mv-tile--media' ) );
+same( 'every matching article, one tile each', [ '100', '101', '102', '103', '104', '105' ], $sorted );
+same( 'featured-only articles last', [ '102', '104' ], ( static function ( $l ) { $t = array_slice( $l, -2 ); sort( $t ); return $t; } )( $links[1] ) );
+check( 'tiles in slides', 6 === substr_count( $track[0], '<li class="mv-shelf__slide"><div class="mv-tile mv-tile--media' ) );
+check( 'row tile never the featured image when the article has another match', ! str_contains( $track[0], 'uploads/10-medium_large' ) && str_contains( $track[0], 'uploads/11-medium_large' ) );
+
+/* ---- popularity: same month last year, summed over translations ---- */
+
+global $wpdb;
+$wpdb->pdo->exec( 'CREATE TABLE wp_rpp_monthly_snapshots ( post_id INTEGER, snapshot_month TEXT, views INTEGER )' );
+MII_Popularity::reset();
+$month = MII_Popularity::same_month_last_year();
+
+foreach ( [ [ 101, 50 ], [ 105, 10 ], [ 0, 99999 ] ] as [ $pid, $v ] ) {
+	$wpdb->insert( 'wp_rpp_monthly_snapshots', [ 'post_id' => $pid, 'snapshot_month' => $month, 'views' => $v ] );
+}
+// Another month does not count.
+$wpdb->insert( 'wp_rpp_monthly_snapshots', [ 'post_id' => 100, 'snapshot_month' => '2001-01-01', 'views' => 1000 ] );
+// 103's English translation (110) had 80 views last year; the group counts.
+$tt = mii_term( 'pll_103', 'post_translations', 'pll_103' );
+$wpdb->update( 'wp_term_taxonomy', [ 'description' => serialize( [ 'fr' => 103, 'en' => 110 ] ) ], [ 'term_taxonomy_id' => $tt ] );
+mii_term_rel( 103, $tt );
+mii_term_rel( 110, $tt );
+$wpdb->insert( 'wp_rpp_monthly_snapshots', [ 'post_id' => 110, 'snapshot_month' => $month, 'views' => 80 ] );
+// Rolling views break the tie between the two with no seasonal data.
+mii_meta( 100, 'views', 7 );
+
+same( 'popularity', [ 100 => [ 'season' => 0, 'recent' => 7 ], 101 => [ 'season' => 50, 'recent' => 0 ], 103 => [ 'season' => 80, 'recent' => 0 ] ],
+	array_intersect_key( MII_Popularity::for_posts( [ 100, 101, 103 ] ), [ 100 => 1, 101 => 1, 103 => 1 ] ) );
+
+same( 'rows ordered by last year’s views, then recent views; featured-only last',
+	[ 103, 101, 105, 100 ], array_slice( array_column( MII_Results::row_tiles( 'turquoise_water', 'fr' ), 'post_id' ), 0, 4 ) );
+same( 'limit', 2, count( MII_Results::row_tiles( 'turquoise_water', 'fr', 2 ) ) );
+same( 'too few articles: no row', [], MII_Results::row_tiles( 'garden', 'fr', 12, 2 ) );
+$wpdb->pdo->exec( 'DROP TABLE wp_rpp_monthly_snapshots' );
+MII_Popularity::reset();
+same( 'without the stats table, recent views still order', 100, MII_Results::row_tiles( 'turquoise_water', 'fr' )[0]['post_id'] );
 check( 'theme arrows enqueued', in_array( 'mv-shelf', $GLOBALS['MOCK_SCRIPTS'], true ) );
 check( 'no concept list on the browse page', ! str_contains( $html, 'mv-tile-grid--compact' ) && ! str_contains( $html, 'Toutes les thématiques' ) );
 check( 'no buttons without the theme', ! str_contains( $html, 'mavo-image-results__cta' ) );
