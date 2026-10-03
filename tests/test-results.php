@@ -151,17 +151,26 @@ same( 'bare page keeps its title', [ 'title' => 'Images' ], MII_Results::title_p
 visit( 50, 'eaux-turquoise' );
 $tiles = MII_Results::tiles( 'turquoise_water', 'fr' );
 $per   = array_count_values( array_column( $tiles, 'post_id' ) );
+// Place eyebrow: the image's place in the article it links to.
+$GLOBALS['MOCK_CHAINS'][101] = [ [ 'country', 300 ], [ 'region', 301 ] ];
+mii_term( 'Milos', 'post_tag', 'milos', 301 );
+MII_Usage::index_posts( [ 101 ] );
+
 same( 'at most two images per article', [ 100 => 2, 101 => 1, 102 => 1 ], ( static function ( $a ) { ksort( $a ); return $a; } )( $per ) );
 
 $html = MII_Results::shortcode( [] );
 check( 'heading', str_contains( $html, '<h2 class="mavo-image-results__title">Eaux turquoise</h2>' ), $html );
 check( 'count', str_contains( $html, '4 photos' ) );
-same( 'tiles', 4, substr_count( $html, 'mavo-image-results__item' ) );
-check( 'tile links to its article', str_contains( $html, '<a href="https://example.test/?p=101">Article 101</a>' ) );
-check( 'alt text in the page language', str_contains( $html, 'alt="Eaux turquoise à Milos"' ) );
-check( 'back to the index', str_contains( $html, 'href="https://example.test/images/">Toutes les thématiques' ) );
-check( 'related: same group, with images', str_contains( $html, '<span>Voir aussi</span> <a href="https://example.test/images/coucher-de-soleil/">Coucher de soleil</a></p>' ), $html );
+same( 'tiles', 4, substr_count( $html, 'class="mv-tile mv-tile--media mavo-image-results__tile"' ) );
+check( 'theme grid', str_contains( $html, '<div class="mv-tile-grid mv-grid mv-grid--3 mavo-image-results__grid">' ) );
+check( 'theme tile anatomy', str_contains( $html, '<span class="mv-tile__media"><img class="mv-tile__img" src="https://example.test/wp-content/uploads/6-medium_large.jpg" alt="" loading="lazy" decoding="async"></span>' ), $html );
+check( 'stretched link to the article', str_contains( $html, '<span class="mv-tile__title"><a class="mv-tile__link" href="https://example.test/?p=101">Article 101</a></span>' ), $html );
+check( 'alt text in the page language, as the description', str_contains( $html, '<span class="mv-tile__description">Eaux turquoise à Milos</span>' ) );
+check( 'back to the index', str_contains( $html, '<a class="mv-badge mv-badge--warm" href="https://example.test/images/">Toutes les thématiques' ) );
+check( 'related: same group, with images, as badges', str_contains( $html, '<span class="mavo-image-results__label">Voir aussi</span> <a class="mv-badge mv-badge--neutral" href="https://example.test/images/coucher-de-soleil/">Coucher de soleil</a></p>' ), $html );
 check( 'no pagination for one page', ! str_contains( $html, 'mavo-image-results__pages' ) );
+check( 'place as eyebrow', str_contains( $html, '<span class="mv-tile__body"><span class="mv-tile__eyebrow">Milos</span><span class="mv-tile__title"><a class="mv-tile__link" href="https://example.test/?p=101">' ), $html );
+check( 'no eyebrow without a place', str_contains( $html, '<span class="mv-tile__body"><span class="mv-tile__title"><a class="mv-tile__link" href="https://example.test/?p=100">' ) );
 check( 'stylesheet enqueued', in_array( 'mavo-image-results', $GLOBALS['MOCK_STYLES'] ?? [], true ) );
 
 $html = MII_Results::shortcode( [ 'per_page' => 3 ] );
@@ -169,17 +178,19 @@ check( 'pagination', str_contains( $html, 'Page 1 sur 2' ) && str_contains( $htm
 
 visit( 50, 'eaux-turquoise', 2 );
 $html = MII_Results::shortcode( [ 'per_page' => 3 ] );
-same( 'page 2 tiles', 1, substr_count( $html, 'mavo-image-results__item' ) );
+same( 'page 2 tiles', 1, substr_count( $html, 'mavo-image-results__tile' ) );
 check( 'previous link', str_contains( $html, 'href="https://example.test/images/eaux-turquoise/">← Page précédente' ) );
 
 visit( 51, 'turquoise-water', 0, 'en' );
 $html = MII_Results::shortcode( [] );
 check( 'English page shows English usages only', str_contains( $html, '1 photo' ) && str_contains( $html, 'Article 110' ), $html );
-check( 'English alt', str_contains( $html, 'alt="Turquoise water 1"' ) );
+check( 'English alt', str_contains( $html, '<span class="mv-tile__description">Turquoise water 1</span>' ) );
 
 visit( 50 );
 $html = MII_Results::shortcode( [] );
-check( 'index lists concepts with images', str_contains( $html, 'href="https://example.test/images/eaux-turquoise/">Eaux turquoise</a> <span class="mavo-image-results__n">7</span>' ), $html );
+check( 'index: compact text tiles with counts', str_contains( $html, '<div class="mv-tile mv-tile--text mv-tile--compact mavo-image-results__concept"><span class="mv-tile__title"><a class="mv-tile__link" href="https://example.test/images/eaux-turquoise/">Eaux turquoise</a></span><span class="mv-tile__description"><span class="mv-tile__count">7</span> photos</span></div>' ), $html );
+check( 'index: singular', str_contains( $html, '<span class="mv-tile__count">1</span> photo</span>' ) );
+check( 'index: compact theme grid', str_contains( $html, '<div class="mv-tile-grid mv-tile-grid--compact">' ) );
 check( 'index includes garden', str_contains( $html, '>Jardins</a>' ) );
 check( 'index omits empty concepts', ! str_contains( $html, 'Châteaux' ) );
 

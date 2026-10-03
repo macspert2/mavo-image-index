@@ -294,6 +294,7 @@ function shortcode_atts( $pairs, $atts, $tag = '' ) {
 	return $out;
 }
 function attachment_url_to_postid( $url ) { return $GLOBALS['MOCK_URL_MAP'][ $url ] ?? 0; }
+function wp_get_attachment_image_url( $id, $size = 'thumbnail' ) { return "https://example.test/wp-content/uploads/$id-$size.jpg"; }
 function wp_get_attachment_url( $id ) { return "https://example.test/wp-content/uploads/$id.jpg"; }
 function get_permalink( $id ) {
 	$id = is_object( $id ) ? $id->ID : (int) $id;

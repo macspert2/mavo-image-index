@@ -25,6 +25,10 @@
  * rules. The paths are stored in an option when they change, so a normal
  * request registers them without computing a permalink.
  *
+ * Tiles, grid and badges are the theme's (mv-tiles.css, loaded on every
+ * page), in the markup its card-post.php uses, so these pages look like
+ * every other list of posts on the site. results.css only adds layout glue.
+ *
  * Output is server-rendered and identical for every visitor. Rendered by
  * [mavo_image_results], or appended to the page's content automatically
  * when the page does not contain the shortcode.
@@ -47,6 +51,8 @@ class MII_Results {
 	const TEXT = [
 		'count'    => [ 'fr' => '%d photos', 'en' => '%d photos', 'de' => '%d Fotos' ],
 		'one'      => [ 'fr' => '1 photo', 'en' => '1 photo', 'de' => '1 Foto' ],
+		'unit'     => [ 'fr' => 'photos', 'en' => 'photos', 'de' => 'Fotos' ],
+		'unit_one' => [ 'fr' => 'photo', 'en' => 'photo', 'de' => 'Foto' ],
 		'from'     => [ 'fr' => 'Article :', 'en' => 'From:', 'de' => 'Artikel:' ],
 		'all'      => [ 'fr' => 'Toutes les thématiques', 'en' => 'All themes', 'de' => 'Alle Themen' ],
 		'related'  => [ 'fr' => 'Voir aussi', 'en' => 'See also', 'de' => 'Siehe auch' ],
@@ -417,13 +423,14 @@ class MII_Results {
 		if ( ! $tiles ) {
 			$out .= '<p class="mavo-image-results__empty">' . esc_html( self::text( 'empty', $lang ) ) . '</p>';
 		} else {
-			$out .= '<ul class="mavo-image-results__grid">';
+			// The theme's grid (mv-tiles.css), as its grid-wrapper.php writes it.
+			$out .= '<div class="mv-tile-grid mv-grid mv-grid--3 mavo-image-results__grid">';
 
 			foreach ( $tiles as $tile ) {
 				$out .= self::render_tile( $tile, $lang );
 			}
 
-			$out .= '</ul>';
+			$out .= '</div>';
 		}
 
 		$out .= self::render_pagination( $concept, $lang, $page, $pages );
@@ -432,44 +439,40 @@ class MII_Results {
 		$index = self::url( '', $lang );
 
 		if ( '' !== $index ) {
-			$out .= '<p class="mavo-image-results__all"><a href="' . esc_url( $index ) . '">' . esc_html( self::text( 'all', $lang ) ) . '</a></p>';
+			$out .= '<p class="mavo-image-results__all"><a class="mv-badge mv-badge--warm" href="' . esc_url( $index ) . '">' . esc_html( self::text( 'all', $lang ) ) . '</a></p>';
 		}
 
 		return $out . '</div>';
 	}
 
+	/** Every concept with photos, as the theme's compact text tiles. */
 	public static function render_index( string $lang ): string {
 		$counts = MII_Search::concept_counts( $lang );
-		$groups = [];
+		$tiles  = '';
 
+		// Dictionary order, which groups landscape, places, activities….
 		foreach ( MII_Concepts::all() as $slug => $def ) {
-			if ( ! empty( $counts[ $slug ] ) ) {
-				$groups[ $def['group'] ][ $slug ] = $counts[ $slug ];
+			if ( empty( $counts[ $slug ] ) ) {
+				continue;
 			}
+
+			$n = (int) $counts[ $slug ];
+
+			$tiles .= '<div class="mv-tile mv-tile--text mv-tile--compact mavo-image-results__concept">'
+				. '<span class="mv-tile__title"><a class="mv-tile__link" href="' . esc_url( self::url( $slug, $lang ) ) . '">'
+				. esc_html( MII_Concepts::label( $slug, $lang ) ) . '</a></span>'
+				. '<span class="mv-tile__description"><span class="mv-tile__count">' . $n . '</span> '
+				. esc_html( self::text( 1 === $n ? 'unit_one' : 'unit', $lang ) )
+				. '</span></div>';
 		}
 
-		if ( ! $groups ) {
+		if ( '' === $tiles ) {
 			return '<p class="mavo-image-results__empty">' . esc_html( self::text( 'empty', $lang ) ) . '</p>';
 		}
 
-		$out = '<div class="mavo-image-results mavo-image-results--index">';
-
-		foreach ( $groups as $group => $concepts ) {
-			$out .= '<ul class="mavo-image-results__concepts mavo-image-results__concepts--' . esc_attr( $group ) . '">';
-
-			foreach ( $concepts as $slug => $n ) {
-				$out .= sprintf(
-					'<li><a href="%s">%s</a> <span class="mavo-image-results__n">%d</span></li>',
-					esc_url( self::url( $slug, $lang ) ),
-					esc_html( MII_Concepts::label( $slug, $lang ) ),
-					(int) $n
-				);
-			}
-
-			$out .= '</ul>';
-		}
-
-		return $out . '</div>';
+		return '<div class="mavo-image-results mavo-image-results--index">'
+			. '<div class="mv-tile-grid mv-tile-grid--compact">' . $tiles . '</div>'
+			. '</div>';
 	}
 
 	/**
@@ -521,27 +524,47 @@ class MII_Results {
 		return $best;
 	}
 
+	/**
+	 * One photo as the theme's media tile — the markup of the theme's
+	 * card-post.php and of mavo-for-you's cards: the whole tile is one link
+	 * (the stretched .mv-tile__link), photo above, text below.
+	 *
+	 * The alt text is shown as the description, so the <img> itself takes
+	 * alt="" as in those tiles: a screen reader would otherwise hear it twice.
+	 */
 	private static function render_tile( array $tile, string $lang ): string {
 		$image   = $tile['image'];
 		$post_id = $tile['post_id'];
-		$link    = (string) get_permalink( $post_id );
-		$title   = get_the_title( $post_id );
-		$img     = wp_get_attachment_image( $image['attachment_id'], 'medium_large', false, [
-			'alt'     => $image['alt_text'],
-			'loading' => 'lazy',
-			'sizes'   => '(max-width: 600px) 100vw, (max-width: 960px) 50vw, 320px',
-			'class'   => 'mavo-image-results__img',
-		] );
+		$src     = (string) wp_get_attachment_image_url( $image['attachment_id'], 'medium_large' );
 
-		if ( '' === $img ) {
+		if ( '' === $src ) {
 			return '';
 		}
 
-		return '<li class="mavo-image-results__item"><figure>'
-			. '<a href="' . esc_url( $link ) . '">' . $img . '</a>'
-			. '<figcaption><span class="mavo-image-results__from">' . esc_html( self::text( 'from', $lang ) ) . '</span> '
-			. '<a href="' . esc_url( $link ) . '">' . esc_html( wp_strip_all_tags( (string) $title ) ) . '</a></figcaption>'
-			. '</figure></li>';
+		$place = '';
+		foreach ( $image['geo']['candidates'] ?? [] as $context ) {
+			if ( (int) $context['post_id'] === $post_id && ! empty( $context['place']['name'] ) ) {
+				$place = (string) $context['place']['name'];
+				break;
+			}
+		}
+
+		$html = '<div class="mv-tile mv-tile--media mavo-image-results__tile">'
+			. '<span class="mv-tile__media"><img class="mv-tile__img" src="' . esc_url( $src ) . '" alt="" loading="lazy" decoding="async"></span>'
+			. '<span class="mv-tile__body">';
+
+		if ( '' !== $place ) {
+			$html .= '<span class="mv-tile__eyebrow">' . esc_html( $place ) . '</span>';
+		}
+
+		$html .= '<span class="mv-tile__title"><a class="mv-tile__link" href="' . esc_url( (string) get_permalink( $post_id ) ) . '">'
+			. esc_html( wp_strip_all_tags( (string) get_the_title( $post_id ) ) ) . '</a></span>';
+
+		if ( '' !== (string) $image['alt_text'] ) {
+			$html .= '<span class="mv-tile__description">' . esc_html( (string) $image['alt_text'] ) . '</span>';
+		}
+
+		return $html . '</span></div>';
 	}
 
 	private static function render_pagination( string $concept, string $lang, int $page, int $pages ): string {
@@ -572,7 +595,7 @@ class MII_Results {
 
 		foreach ( MII_Concepts::all() as $slug => $def ) {
 			if ( $slug !== $concept && $def['group'] === $group && ! empty( $counts[ $slug ] ) ) {
-				$links[] = '<a href="' . esc_url( self::url( $slug, $lang ) ) . '">' . esc_html( MII_Concepts::label( $slug, $lang ) ) . '</a>';
+				$links[] = '<a class="mv-badge mv-badge--neutral" href="' . esc_url( self::url( $slug, $lang ) ) . '">' . esc_html( MII_Concepts::label( $slug, $lang ) ) . '</a>';
 			}
 		}
 
@@ -580,7 +603,7 @@ class MII_Results {
 			return '';
 		}
 
-		return '<p class="mavo-image-results__related"><span>' . esc_html( self::text( 'related', $lang ) ) . '</span> ' . implode( ' · ', $links ) . '</p>';
+		return '<p class="mavo-image-results__related"><span class="mavo-image-results__label">' . esc_html( self::text( 'related', $lang ) ) . '</span> ' . implode( ' ', $links ) . '</p>';
 	}
 
 	private static function current_label(): ?string {

@@ -33,7 +33,7 @@ agent.md**. Consumer documentation is in `README.md`.
 | `includes/class-mavo-image-index-cli.php` | `wp mavo-image-index` (WP-CLI only) |
 | `data/concepts.php` | The starter dictionary (39 concepts, fr/en/de) |
 | `assets/admin.js`, `assets/admin.css` | The rebuild runner and admin styles |
-| `assets/results.css` | Results-page grid |
+| `assets/results.css` | Results-page spacing only; tiles come from the theme |
 | `tests/` | `run.sh`; SQLite-backed harness |
 
 ---
@@ -136,6 +136,13 @@ an overlay or a separate consumer plugin.
   with fifteen coves must not fill the page), links each image to the article
   using it in the page's language, and paginates 24 per page. Related concepts
   of the same group and a link back to the index follow.
+- Look: the theme's own components from `mv-tiles.css` (loaded on every page),
+  in the markup of its `template-parts/mv-shared/card-post.php`: photos are
+  `mv-tile mv-tile--media` in `mv-tile-grid mv-grid--3` (place as eyebrow,
+  article title as the stretched link, alt text as the description with
+  `alt=""` on the img), the index is `mv-tile--text mv-tile--compact` with
+  `mv-tile__count`, related/back links are `mv-badge`. `assets/results.css`
+  holds only spacing. If the theme renames these classes, this follows.
 - SEO: title and Yoast title/description name the concept; canonical, og:url
   and Polylang's hreflang/switcher (`pll_translation_url`) point at the concept
   URL in each language, never the bare page.
