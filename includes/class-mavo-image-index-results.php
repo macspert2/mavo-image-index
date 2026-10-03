@@ -480,22 +480,51 @@ class MII_Results {
 	 * most PER_ARTICLE per article — so one article with fifteen turquoise
 	 * coves does not fill the page.
 	 *
+	 * An article's featured image is what every other tile on the site
+	 * already shows for that article, so it is used only when the article
+	 * has no other photo of the concept, and such fallbacks come after every
+	 * other tile. Measured on the live turquoise_water page before this:
+	 * 11 of the first 24 tiles were featured images, all at the top.
+	 *
 	 * @return array<int,array{image:array,post_id:int}>
 	 */
 	public static function tiles( string $concept, string $lang ): array {
-		$results  = mavo_image_search( [ 'lang' => $lang, 'concepts' => [ $concept ], 'limit' => self::POOL ] );
-		$per_post = [];
-		$tiles    = [];
+		$results = mavo_image_search( [ 'lang' => $lang, 'concepts' => [ $concept ], 'limit' => self::POOL ] );
+
+		/** Whether an article's featured image may stand in when it has no other match. */
+		$fallback = (bool) apply_filters( 'mavo_image_results_featured_fallback', true, $concept, $lang );
+
+		$per_post  = [];
+		$tiles     = [];
+		$featured  = [];
 
 		foreach ( $results as $image ) {
 			$post_id = self::article_for( $image, $lang );
 
-			if ( ! $post_id || ( $per_post[ $post_id ] ?? 0 ) >= self::PER_ARTICLE ) {
+			if ( ! $post_id ) {
+				continue;
+			}
+
+			if ( in_array( $post_id, $image['featured_for'], true ) ) {
+				$featured[ $post_id ] = $featured[ $post_id ] ?? $image;
+				continue;
+			}
+
+			if ( ( $per_post[ $post_id ] ?? 0 ) >= self::PER_ARTICLE ) {
 				continue;
 			}
 
 			$per_post[ $post_id ] = ( $per_post[ $post_id ] ?? 0 ) + 1;
 			$tiles[]              = [ 'image' => $image, 'post_id' => $post_id ];
+		}
+
+		if ( $fallback ) {
+			foreach ( $featured as $post_id => $image ) {
+				if ( ! isset( $per_post[ $post_id ] ) ) {
+					$per_post[ $post_id ] = 1;
+					$tiles[]              = [ 'image' => $image, 'post_id' => $post_id ];
+				}
+			}
 		}
 
 		_prime_post_caches( array_keys( $per_post ), false, false );
@@ -505,20 +534,25 @@ class MII_Results {
 
 	/* ------------------------------------------------------------- private */
 
-	/** The article an image is shown in: in this language, content before featured. */
+	/**
+	 * The article an image is shown in, in this language: preferably one
+	 * where it is not also the featured image, then any.
+	 */
 	private static function article_for( array $image, string $lang ): int {
 		$best = 0;
 
 		foreach ( $image['usages'] as $usage ) {
+			$post_id = (int) $usage['post_id'];
+
 			if ( $usage['lang'] !== $lang ) {
 				continue;
 			}
 
-			if ( 'content' === $usage['role'] ) {
-				return (int) $usage['post_id'];
+			if ( 'content' === $usage['role'] && ! in_array( $post_id, $image['featured_for'], true ) ) {
+				return $post_id;
 			}
 
-			$best = $best ?: (int) $usage['post_id'];
+			$best = $best ?: $post_id;
 		}
 
 		return $best;

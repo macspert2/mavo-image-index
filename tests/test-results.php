@@ -23,11 +23,19 @@ mii_image( 6, 1200, 800, [ 'fr' => 'Eaux turquoise à Milos' ] );
 mii_image( 7, 1200, 800, [ 'fr' => 'Plage aux eaux turquoise' ] );
 mii_image( 8, 1200, 800, [ 'fr' => 'Jardin' ] );
 mii_image( 9, 1200, 800, [ 'fr' => 'Coucher de soleil' ] );
+mii_image( 10, 1200, 800, [ 'fr' => 'Lagon aux eaux turquoise' ] );
+mii_image( 11, 1200, 800, [ 'fr' => 'Crique aux eaux turquoise' ] );
+mii_image( 12, 1200, 800, [ 'fr' => 'Mer turquoise' ] );
 
 mii_post( 100, '<img class="wp-image-1"><img class="wp-image-2"><img class="wp-image-3"><img class="wp-image-4"><img class="wp-image-5">', [ 'lang' => 'fr' ] );
 mii_post( 101, '<img class="wp-image-6"><img class="wp-image-9">', [ 'lang' => 'fr' ] );
 mii_post( 102, '<img class="wp-image-7"><img class="wp-image-8">', [ 'lang' => 'fr', 'thumb' => 7 ] );
 mii_post( 110, '<img class="wp-image-1">', [ 'lang' => 'en' ] );
+// 103: featured AND a content match → only the content one. 104: featured-only
+// match also used in 105's content → shown, linked to 105.
+mii_post( 103, '<img class="wp-image-10"><img class="wp-image-11">', [ 'lang' => 'fr', 'thumb' => 10, 'date' => '2025-01-01 00:00:00' ] );
+mii_post( 104, '', [ 'lang' => 'fr', 'thumb' => 12 ] );
+mii_post( 105, '<img class="wp-image-12">', [ 'lang' => 'fr' ] );
 
 MII_Rebuild::step( 'images', 0, 100 );
 MII_Rebuild::step( 'usages', 0, 100 );
@@ -156,12 +164,22 @@ $GLOBALS['MOCK_CHAINS'][101] = [ [ 'country', 300 ], [ 'region', 301 ] ];
 mii_term( 'Milos', 'post_tag', 'milos', 301 );
 MII_Usage::index_posts( [ 101 ] );
 
-same( 'at most two images per article', [ 100 => 2, 101 => 1, 102 => 1 ], ( static function ( $a ) { ksort( $a ); return $a; } )( $per ) );
+same( 'at most two images per article', [ 100 => 2, 101 => 1, 102 => 1, 103 => 1, 105 => 1 ], ( static function ( $a ) { ksort( $a ); return $a; } )( $per ) );
+
+$order = array_column( $tiles, 'post_id' );
+same( 'featured image never chosen when the article has another match', [ 11 ], array_column( array_column( array_filter( $tiles, static fn( $t ) => 103 === $t['post_id'] ), 'image' ), 'attachment_id' ) );
+same( 'image featured elsewhere links to the article using it in content', 12, array_column( array_column( array_filter( $tiles, static fn( $t ) => 105 === $t['post_id'] ), 'image' ), 'attachment_id' )[0] ?? null );
+same( 'featured-only article falls back, last', 102, end( $order ) );
+same( 'featured fallback is its featured image', 7, end( $tiles )['image']['attachment_id'] );
+
+add_filter( 'mavo_image_results_featured_fallback', static fn() => false );
+check( 'fallback can be switched off', ! in_array( 102, array_column( MII_Results::tiles( 'turquoise_water', 'fr' ), 'post_id' ), true ) );
+remove_all_filters( 'mavo_image_results_featured_fallback' );
 
 $html = MII_Results::shortcode( [] );
 check( 'heading', str_contains( $html, '<h2 class="mavo-image-results__title">Eaux turquoise</h2>' ), $html );
-check( 'count', str_contains( $html, '4 photos' ) );
-same( 'tiles', 4, substr_count( $html, 'class="mv-tile mv-tile--media mavo-image-results__tile"' ) );
+check( 'count', str_contains( $html, '6 photos' ) );
+same( 'tiles', 6, substr_count( $html, 'class="mv-tile mv-tile--media mavo-image-results__tile"' ) );
 check( 'theme grid', str_contains( $html, '<div class="mv-tile-grid mv-grid mv-grid--3 mavo-image-results__grid">' ) );
 check( 'theme tile anatomy', str_contains( $html, '<span class="mv-tile__media"><img class="mv-tile__img" src="https://example.test/wp-content/uploads/6-medium_large.jpg" alt="" loading="lazy" decoding="async"></span>' ), $html );
 check( 'stretched link to the article', str_contains( $html, '<span class="mv-tile__title"><a class="mv-tile__link" href="https://example.test/?p=101">Article 101</a></span>' ), $html );
@@ -178,7 +196,7 @@ check( 'pagination', str_contains( $html, 'Page 1 sur 2' ) && str_contains( $htm
 
 visit( 50, 'eaux-turquoise', 2 );
 $html = MII_Results::shortcode( [ 'per_page' => 3 ] );
-same( 'page 2 tiles', 1, substr_count( $html, 'mavo-image-results__tile' ) );
+same( 'page 2 tiles', 3, substr_count( $html, 'mavo-image-results__tile' ) );
 check( 'previous link', str_contains( $html, 'href="https://example.test/images/eaux-turquoise/">← Page précédente' ) );
 
 visit( 51, 'turquoise-water', 0, 'en' );
@@ -188,7 +206,7 @@ check( 'English alt', str_contains( $html, '<span class="mv-tile__description">T
 
 visit( 50 );
 $html = MII_Results::shortcode( [] );
-check( 'index: compact text tiles with counts', str_contains( $html, '<div class="mv-tile mv-tile--text mv-tile--compact mavo-image-results__concept"><span class="mv-tile__title"><a class="mv-tile__link" href="https://example.test/images/eaux-turquoise/">Eaux turquoise</a></span><span class="mv-tile__description"><span class="mv-tile__count">7</span> photos</span></div>' ), $html );
+check( 'index: compact text tiles with counts', str_contains( $html, '<div class="mv-tile mv-tile--text mv-tile--compact mavo-image-results__concept"><span class="mv-tile__title"><a class="mv-tile__link" href="https://example.test/images/eaux-turquoise/">Eaux turquoise</a></span><span class="mv-tile__description"><span class="mv-tile__count">10</span> photos</span></div>' ), $html );
 check( 'index: singular', str_contains( $html, '<span class="mv-tile__count">1</span> photo</span>' ) );
 check( 'index: compact theme grid', str_contains( $html, '<div class="mv-tile-grid mv-tile-grid--compact">' ) );
 check( 'index includes garden', str_contains( $html, '>Jardins</a>' ) );
@@ -206,6 +224,6 @@ same( 'not appended twice', '<p>[mavo_image_results]</p>', MII_Results::append_t
 visit( 101 );
 same( 'not appended elsewhere', '<p>x</p>', MII_Results::append_to_page( '<p>x</p>' ) );
 
-same( 'concept counts', [ 'beach' => 1, 'garden' => 1, 'sunset' => 1, 'turquoise_water' => 7 ], ( static function ( $c ) { ksort( $c ); return $c; } )( mavo_image_concept_counts( 'fr' ) ) );
+same( 'concept counts', [ 'beach' => 2, 'garden' => 1, 'sea' => 1, 'sunset' => 1, 'turquoise_water' => 10 ], ( static function ( $c ) { ksort( $c ); return $c; } )( mavo_image_concept_counts( 'fr' ) ) );
 
 done();

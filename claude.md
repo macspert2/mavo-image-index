@@ -134,7 +134,12 @@ an overlay or a separate consumer plugin.
   Unknown slugs are 404s.
 - The grid takes up to 100 matches, keeps at most two per article (one article
   with fifteen coves must not fill the page), links each image to the article
-  using it in the page's language, and paginates 24 per page. Related concepts
+  using it in the page's language, and paginates 24 per page. An article's
+  featured image is used only when the article has no other photo of the
+  concept, and such fallbacks come last (filter
+  `mavo_image_results_featured_fallback` to drop them): on the live
+  turquoise page, 11 of the first 24 tiles had been featured images, which
+  look exactly like the site's ordinary post tiles. Related concepts
   of the same group and a link back to the index follow.
 - Look: the theme's own components from `mv-tiles.css` (loaded on every page),
   in the markup of its `template-parts/mv-shared/card-post.php`: photos are
