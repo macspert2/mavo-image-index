@@ -160,17 +160,25 @@ visit( 50, 'eaux-turquoise' );
 $tiles = MII_Results::tiles( 'turquoise_water', 'fr' );
 $per   = array_count_values( array_column( $tiles, 'post_id' ) );
 // Place eyebrow: the image's place in the article it links to.
+// Eyebrow: country and region of the article's place, never the city.
 $GLOBALS['MOCK_CHAINS'][101] = [ [ 'country', 300 ], [ 'region', 301 ] ];
-mii_term( 'Milos', 'post_tag', 'milos', 301 );
-MII_Usage::index_posts( [ 101 ] );
+$GLOBALS['MOCK_CHAINS'][103] = [ [ 'continent', 309 ], [ 'country', 310 ], [ 'region', 311 ], [ 'city', 312 ] ];
+foreach ( [ 300 => 'Grèce', 301 => 'Milos', 309 => 'Europe', 310 => 'Espagne', 311 => 'Aragon', 312 => 'Torla' ] as $tid => $tname ) {
+	mii_term( $tname, 'post_tag', "g$tid", $tid );
+}
+MII_Usage::index_posts( [ 101, 103 ] );
 
 same( 'at most two images per article', [ 100 => 2, 101 => 1, 102 => 1, 103 => 1, 105 => 1 ], ( static function ( $a ) { ksort( $a ); return $a; } )( $per ) );
 
 $order = array_column( $tiles, 'post_id' );
 same( 'featured image never chosen when the article has another match', [ 11 ], array_column( array_column( array_filter( $tiles, static fn( $t ) => 103 === $t['post_id'] ), 'image' ), 'attachment_id' ) );
 same( 'image featured elsewhere links to the article using it in content', 12, array_column( array_column( array_filter( $tiles, static fn( $t ) => 105 === $t['post_id'] ), 'image' ), 'attachment_id' )[0] ?? null );
-same( 'featured-only article falls back, last', 102, end( $order ) );
-same( 'featured fallback is its featured image', 7, end( $tiles )['image']['attachment_id'] );
+$first = array_values( array_unique( $order ) );
+same( 'featured-only article falls back, last of the first round', 102, end( $first ) );
+same( 'featured fallback is its featured image', 7, array_values( array_filter( $tiles, static fn( $t ) => 102 === $t['post_id'] ) )[0]['image']['attachment_id'] );
+same( 'rounds: every article once before any article twice', $first, array_slice( $order, 0, count( $first ) ) );
+same( 'a photo featured-only here but inline elsewhere appears once, under the inline article', 1,
+	count( array_filter( $tiles, static fn( $t ) => 12 === $t['image']['attachment_id'] ) ) );
 
 add_filter( 'mavo_image_results_featured_fallback', static fn() => false );
 check( 'fallback can be switched off', ! in_array( 102, array_column( MII_Results::tiles( 'turquoise_water', 'fr' ), 'post_id' ), true ) );
@@ -187,7 +195,15 @@ check( 'alt text in the page language, as the description', str_contains( $html,
 check( 'back to the index', str_contains( $html, '<a class="mv-badge mv-badge--warm" href="https://example.test/images/">Toutes les thématiques' ) );
 check( 'related: same group, with images, as badges', str_contains( $html, '<span class="mavo-image-results__label">Voir aussi</span> <a class="mv-badge mv-badge--neutral" href="https://example.test/images/coucher-de-soleil/">Coucher de soleil</a></p>' ), $html );
 check( 'no pagination for one page', ! str_contains( $html, 'mavo-image-results__pages' ) );
-check( 'place as eyebrow', str_contains( $html, '<span class="mv-tile__body"><span class="mv-tile__eyebrow">Milos</span><span class="mv-tile__title"><a class="mv-tile__link" href="https://example.test/?p=101">' ), $html );
+check( 'eyebrow: country, region', str_contains( $html, '<span class="mv-tile__body"><span class="mv-tile__eyebrow">Grèce, Milos</span><span class="mv-tile__title"><a class="mv-tile__link" href="https://example.test/?p=101">' ), $html );
+check( 'eyebrow never the city or continent', str_contains( $html, '<span class="mv-tile__eyebrow">Espagne, Aragon</span><span class="mv-tile__title"><a class="mv-tile__link" href="https://example.test/?p=103">' ) && ! str_contains( $html, 'Torla' ) && ! str_contains( $html, 'Europe' ), $html );
+add_filter( 'mavo_image_tile_eyebrow', static fn( $label, $post_id ) => 103 === $post_id ? 'Torla' : $label, 10, 2 );
+check( 'eyebrow is filterable (a location plugin can pick the level)', str_contains( MII_Results::shortcode( [] ), '<span class="mv-tile__eyebrow">Torla</span>' ) );
+remove_all_filters( 'mavo_image_tile_eyebrow' );
+$GLOBALS['MOCK_CHAINS'][105] = [ [ 'country', 310 ] ];
+MII_Usage::index_posts( [ 105 ] );
+check( 'country alone when there is no region', str_contains( MII_Results::shortcode( [] ), '<span class="mv-tile__eyebrow">Espagne</span><span class="mv-tile__title"><a class="mv-tile__link" href="https://example.test/?p=105">' ) );
+same( 'geo context exposes country and region', [ 'Espagne', 'Aragon' ], [ mavo_image_get_geo_context( 11, [ 'post_id' => 103 ] )['country']['name'], mavo_image_get_geo_context( 11, [ 'post_id' => 103 ] )['region']['name'] ] );
 check( 'no eyebrow without a place', str_contains( $html, '<span class="mv-tile__body"><span class="mv-tile__title"><a class="mv-tile__link" href="https://example.test/?p=100">' ) );
 check( 'stylesheet enqueued', in_array( 'mavo-image-results', $GLOBALS['MOCK_STYLES'] ?? [], true ) );
 
@@ -245,10 +261,43 @@ preg_match( '#<ul class="mv-shelf__track".*?</ul>#s', $html, $track );
 preg_match_all( '#mv-tile__link" href="https://example.test/\?p=(\d+)"#', $track[0], $links );
 $sorted = $links[1];
 sort( $sorted );
-same( 'every matching article, one tile each', [ '100', '101', '102', '103', '104', '105' ], $sorted );
-same( 'featured-only articles last', [ '102', '104' ], ( static function ( $l ) { $t = array_slice( $l, -2 ); sort( $t ); return $t; } )( $links[1] ) );
-check( 'tiles in slides', 6 === substr_count( $track[0], '<li class="mv-shelf__slide"><div class="mv-tile mv-tile--media' ) );
+// 104's only photo (12, its featured image) is the one 105 shows inline, so
+// 104 has no photo of its own left: no photo twice in one row.
+same( 'every article with a photo of its own, one tile each', [ '100', '101', '102', '103', '105' ], $sorted );
+same( 'featured-only articles last', '102', end( $links[1] ) );
+check( 'tiles in slides', 5 === substr_count( $track[0], '<li class="mv-shelf__slide"><div class="mv-tile mv-tile--media' ) );
 check( 'row tile never the featured image when the article has another match', ! str_contains( $track[0], 'uploads/10-medium_large' ) && str_contains( $track[0], 'uploads/11-medium_large' ) );
+
+/* ---- one appearance per article across the whole browse page ---- */
+
+$all = array_column( MII_Results::row_tiles( 'turquoise_water', 'fr' ), 'post_id' );
+$cut = array_column( MII_Results::row_tiles( 'turquoise_water', 'fr', 12, 1, [ $all[0], $all[1] ] ), 'post_id' );
+check( 'excluded articles are left out of a row', ! array_intersect( [ $all[0], $all[1] ], $cut ), $cut );
+same( 'the rest keep their order', array_values( array_intersect( $all, $cut ) ), array_values( array_intersect( $cut, $all ) ) );
+same( 'the minimum counts what is left after exclusion', [], MII_Results::row_tiles( 'turquoise_water', 'fr', 12, count( $cut ) + 1, [ $all[0], $all[1] ] ) );
+
+// In the fixtures every garden and beach article is also a turquoise one, so
+// with turquoise first those rows are empty and vanish; small rows first.
+add_filter( 'mavo_image_results_row_min', static fn() => 1 );
+same( 'rows wholly shown above vanish', 1, substr_count( MII_Results::render_rows( 'fr' ), '<section class="mv-shelf' ) );
+
+update_option( MII_Results::ROWS_OPTION, [ 'garden', 'beach', 'turquoise_water' ] );
+$html = MII_Results::render_rows( 'fr' );
+preg_match_all( '#mv-tile__link" href="https://example.test/\?p=(\d+)"#', $html, $every );
+same( 'small rows first: all three rendered', 3, substr_count( $html, '<section class="mv-shelf' ) );
+same( 'no article appears in two rows', count( $every[1] ), count( array_unique( $every[1] ) ) );
+same( 'and together they still show every article with a photo of its own', [ '100', '101', '102', '103', '105' ],
+	( static function ( $l ) { $l = array_unique( $l ); sort( $l ); return array_values( $l ); } )( $every[1] ) );
+preg_match_all( '#<ul class="mv-shelf__track".*?</ul>#s', $html, $tracks );
+same( 'the first row keeps everything it had', count( MII_Results::row_tiles( 'garden', 'fr', 12, 1 ) ), substr_count( $tracks[0][0], '<li class="mv-shelf__slide">' ) );
+update_option( MII_Results::ROWS_OPTION, [ 'turquoise_water', 'garden', 'beach' ] );
+remove_all_filters( 'mavo_image_results_row_min' );
+
+visit( 50, 'eaux-turquoise' );
+$concept = MII_Results::shortcode( [] );
+preg_match_all( '#mv-tile__link" href="https://example.test/\?p=(\d+)"#', $concept, $grid );
+check( 'concept pages still show several photos of one article', count( $grid[1] ) > count( array_unique( $grid[1] ) ), implode( ',', $grid[1] ) );
+visit( 50 );
 
 /* ---- popularity: same month last year, summed over translations ---- */
 
@@ -277,6 +326,8 @@ same( 'popularity', [ 100 => [ 'season' => 0, 'recent' => 7 ], 101 => [ 'season'
 same( 'rows ordered by last year’s views, then recent views; featured-only last',
 	[ 103, 101, 105, 100 ], array_slice( array_column( MII_Results::row_tiles( 'turquoise_water', 'fr' ), 'post_id' ), 0, 4 ) );
 same( 'limit', 2, count( MII_Results::row_tiles( 'turquoise_water', 'fr', 2 ) ) );
+$grid_first = array_values( array_unique( array_column( MII_Results::tile_refs( 'turquoise_water', 'fr' ), 'post_id' ) ) );
+same( 'concept grid: same popularity order as the rows', array_column( MII_Results::row_tiles( 'turquoise_water', 'fr' ), 'post_id' ), $grid_first );
 same( 'too few articles: no row', [], MII_Results::row_tiles( 'garden', 'fr', 12, 2 ) );
 $wpdb->pdo->exec( 'DROP TABLE wp_rpp_monthly_snapshots' );
 MII_Popularity::reset();
@@ -299,8 +350,10 @@ same( 'a language without enough articles gets no row', 0, substr_count( $html, 
 check( '… and falls back to the concept list', str_contains( $html, 'mv-tile-grid--compact' ) );
 
 add_filter( 'mavo_image_results_row_min', static fn() => 1 );
+update_option( MII_Results::ROWS_OPTION, [ 'garden', 'beach', 'turquoise_water' ] );
 visit( 50 );
 same( 'row minimum is filterable', 3, substr_count( MII_Results::shortcode( [] ), '<section class="mv-shelf' ) );
+update_option( MII_Results::ROWS_OPTION, [ 'turquoise_water', 'garden', 'beach' ] );
 remove_all_filters( 'mavo_image_results_row_min' );
 
 $GLOBALS['MOCK_REGISTERED'] = [];

@@ -75,7 +75,7 @@ per image attachment.
 ### 3. Geography is stored on usage rows
 
 Each usage row carries a snapshot (`geo_precision`, `geo_confidence`,
-`geo_lat/lng`, `geo_place`) resolved at index time. Reading an image's geography
+`geo_lat/lng`, `geo_place`, `geo_country`, `geo_region`) resolved at index time. Reading an image's geography
 is then one query, never a hierarchy walk per result. The snapshot is refreshed
 by `set_object_terms` (post_tag, language), `geo_mashup_location_saved` and
 `save_post` (priority 30, after geotag-plus tags at 20).
@@ -144,7 +144,7 @@ an overlay or a separate consumer plugin.
   of the same group and a link back to the index follow.
 - Look: the theme's own components from `mv-tiles.css` (loaded on every page),
   in the markup of its `template-parts/mv-shared/card-post.php`: photos are
-  `mv-tile mv-tile--media` in `mv-tile-grid mv-grid--3` (place as eyebrow,
+  `mv-tile mv-tile--media` in `mv-tile-grid mv-grid--3` (country, region as eyebrow,
   article title as the stretched link, alt text as the description with
   `alt=""` on the img), the index is `mv-tile--text mv-tile--compact` with
   `mv-tile__count`, related/back links are `mv-badge`. `assets/results.css`
@@ -169,8 +169,21 @@ an overlay or a separate consumer plugin.
   Polylang translation group**, because EN/DE tracking is under a year old and
   their own last-year rows are empty; then the rolling 90-day `views` meta;
   then the newest photo. Featured-only articles still come last. The stats
-  table is checked for, not assumed. The concept grid pages
-  (`/images/eaux-turquoise/`) keep image-relevance order.
+  table is checked for, not assumed. No photo twice in a row: an article
+  whose only photo another article already shows is skipped.
+- The concept grid pages (`/images/eaux-turquoise/`) use the same ranking
+  (2026-10-04): `ranked_articles()` serves both. The grid deals in rounds —
+  every article's best photo, then every second photo — so an article's two
+  photos are not side by side; a photo shared by two articles appears once,
+  under the more popular. Tiles are references until the page is sliced, so
+  only the 24 shown are hydrated.
+- Tile eyebrow (2026-10-04): **"Country, Region"** of the article's place, in
+  its language — the city a post is tagged with was too specific. Either alone
+  when only one is known; nothing without either. Usage rows store
+  `geo_country` / `geo_region` term IDs beside `geo_place` (schema 2), filled
+  from the same geotag-plus chain at index time. Filter
+  `mavo_image_tile_eyebrow` is the seam for the planned mavo-location plugin
+  (London / GB-South / Denmark by level).
 - Rows are the theme's **`.mv-shelf`** component (CSS in `mv-tiles.css`,
   arrows in the theme's `js/mv-shelf.js`, registered as `mv-shelf` and
   enqueued here only when rows render). It was moved out of mavo-for-you's

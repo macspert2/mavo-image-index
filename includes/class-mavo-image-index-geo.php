@@ -57,7 +57,7 @@ class MII_Geo {
 
 		foreach ( $post_langs as $post_id => $lang ) {
 			$context = self::unknown();
-			$place   = self::leaf_place( (int) $post_id, (string) $lang );
+			$place   = self::chain_places( (int) $post_id, (string) $lang );
 
 			if ( $place ) {
 				$precision = 'place_' . $place['level'];
@@ -73,6 +73,8 @@ class MII_Geo {
 					'lat'        => null,
 					'lng'        => null,
 					'place'      => $place['term_id'],
+					'country'    => $place['country'],
+					'region'     => $place['region'],
 				];
 			}
 
@@ -101,6 +103,8 @@ class MII_Geo {
 			'lat'        => null,
 			'lng'        => null,
 			'place'      => null,
+			'country'    => null,
+			'region'     => null,
 		];
 	}
 
@@ -113,6 +117,10 @@ class MII_Geo {
 	public static function from_row( array $row, array $names = [] ): array {
 		$precision = (string) ( $row['geo_precision'] ?? 'unknown' );
 		$place     = isset( $row['geo_place'] ) && $row['geo_place'] ? (int) $row['geo_place'] : null;
+		$term      = static function ( $key ) use ( $row, $names ) {
+			$id = isset( $row[ $key ] ) && $row[ $key ] ? (int) $row[ $key ] : 0;
+			return $id ? [ 'term_id' => $id, 'name' => $names[ $id ] ?? '' ] : null;
+		};
 
 		return [
 			'lat'        => isset( $row['geo_lat'] ) && null !== $row['geo_lat'] ? (float) $row['geo_lat'] : null,
@@ -123,6 +131,8 @@ class MII_Geo {
 			'post_id'    => (int) $row['post_id'],
 			'lang'       => (string) ( $row['lang'] ?? '' ),
 			'place'      => $place ? [ 'term_id' => $place, 'name' => $names[ $place ] ?? '' ] : null,
+			'country'    => $term( 'geo_country' ),
+			'region'     => $term( 'geo_region' ),
 		];
 	}
 
@@ -230,11 +240,26 @@ class MII_Geo {
 	}
 
 	/**
-	 * The post's most specific place, through mavo-geotag-plus's API.
+	 * Every term-ID column a usage row stores a place in, for name lookups.
 	 *
-	 * @return array{term_id:int,level:string}|null
+	 * @param array[] $rows Usage rows.
+	 * @return int[]
 	 */
-	private static function leaf_place( int $post_id, string $lang ): ?array {
+	public static function place_terms( array $rows ): array {
+		return array_merge(
+			array_column( $rows, 'geo_place' ),
+			array_column( $rows, 'geo_country' ),
+			array_column( $rows, 'geo_region' )
+		);
+	}
+
+	/**
+	 * The post's places, through mavo-geotag-plus's API: the most specific one,
+	 * plus its country and region when the chain has those levels.
+	 *
+	 * @return array{term_id:int,level:string,country:?int,region:?int}|null
+	 */
+	private static function chain_places( int $post_id, string $lang ): ?array {
 		if ( ! function_exists( 'mavo_geo_place_chain' ) ) {
 			return null;
 		}
@@ -252,7 +277,22 @@ class MII_Geo {
 			return null;
 		}
 
-		return [ 'term_id' => $term_id, 'level' => sanitize_key( (string) ( $leaf->level ?? 'city' ) ) ];
+		$levels = [];
+
+		foreach ( $chain as $place ) {
+			$id = (int) ( $place->{'term_id_' . $lang} ?? 0 );
+
+			if ( $id ) {
+				$levels[ sanitize_key( (string) ( $place->level ?? '' ) ) ] = $id;
+			}
+		}
+
+		return [
+			'term_id' => $term_id,
+			'level'   => sanitize_key( (string) ( $leaf->level ?? 'city' ) ),
+			'country' => $levels['country'] ?? null,
+			'region'  => $levels['region'] ?? null,
+		];
 	}
 
 	/**

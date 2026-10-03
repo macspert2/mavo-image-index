@@ -14,3 +14,8 @@
    which only landing pages load, so it is mirrored here for this one wrapper. */
 .mavo-image-results__cta { margin: 2.5em 0 1em; }
 .mavo-image-results__cta .mv-hero__cta-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+/* Four buttons: 2 × 2 from tablet width up, as on the home page (mv-home.css). */
+@media (min-width: 600px) {
+	.mavo-image-results__cta .mv-hero__cta-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.mavo-image-results__cta .mv-button { text-align: center; }
+}

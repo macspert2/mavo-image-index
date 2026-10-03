@@ -65,7 +65,7 @@ class MII_Images {
 		$semantic = self::semantics_for( $found );
 		$usages   = MII_Usage::for_attachments( $found );
 		$names    = MII_Geo::place_names( array_merge( [], ...array_map(
-			static fn( $rows ) => array_column( $rows, 'geo_place' ),
+			[ 'MII_Geo', 'place_terms' ],
 			array_values( $usages )
 		) ) );
 		$hubs     = ! empty( $args['hubs'] ) ? self::hubs_for( $usages ) : [];

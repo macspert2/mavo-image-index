@@ -75,7 +75,7 @@ class Test_WPDB {
 				UNIQUE ( attachment_id, lang, concept, source ) );
 			CREATE TABLE wp_mavo_image_usage ( id INTEGER PRIMARY KEY AUTOINCREMENT, attachment_id INTEGER, post_id INTEGER, lang TEXT DEFAULT '',
 				role TEXT, source TEXT DEFAULT '', position INTEGER DEFAULT 0, geo_precision TEXT DEFAULT 'unknown', geo_confidence REAL DEFAULT 0,
-				geo_lat REAL, geo_lng REAL, geo_place INTEGER, created_at TEXT, updated_at TEXT, UNIQUE ( attachment_id, post_id, role ) );
+				geo_lat REAL, geo_lng REAL, geo_place INTEGER, geo_country INTEGER, geo_region INTEGER, created_at TEXT, updated_at TEXT, UNIQUE ( attachment_id, post_id, role ) );
 		" );
 	}
 

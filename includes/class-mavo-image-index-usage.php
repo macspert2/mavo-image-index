@@ -188,6 +188,8 @@ class MII_Usage {
 					'geo_lat'        => $ctx['lat'],
 					'geo_lng'        => $ctx['lng'],
 					'geo_place'      => $ctx['place'] ? (int) $ctx['place'] : null,
+					'geo_country'    => ! empty( $ctx['country'] ) ? (int) $ctx['country'] : null,
+					'geo_region'     => ! empty( $ctx['region'] ) ? (int) $ctx['region'] : null,
 				];
 
 				if ( isset( $have[ $key ] ) ) {

@@ -47,7 +47,6 @@ class MII_Results {
 
 	const PER_PAGE     = 24;
 	const PER_ARTICLE  = 2;
-	const POOL         = 100;
 
 	/** A browse row: up to this many articles… */
 	const ROW_TILES    = 12;
@@ -424,11 +423,13 @@ class MII_Results {
 	}
 
 	public static function render_concept( string $concept, string $lang, int $page = 1, int $per_page = self::PER_PAGE ): string {
-		$tiles = self::tiles( $concept, $lang );
-		$total = count( $tiles );
+		// Every tile as a reference, so the count and pagination are exact;
+		// only this page's photos are loaded in full.
+		$refs  = self::tile_refs( $concept, $lang );
+		$total = count( $refs );
 		$pages = max( 1, (int) ceil( $total / $per_page ) );
 		$page  = min( max( 1, $page ), $pages );
-		$tiles = array_slice( $tiles, ( $page - 1 ) * $per_page, $per_page );
+		$tiles = self::hydrate( array_slice( $refs, ( $page - 1 ) * $per_page, $per_page ), $lang );
 		$label = MII_Concepts::label( $concept, $lang );
 
 		$out  = '<div class="mavo-image-results mavo-image-results--' . esc_attr( str_replace( '_', '-', $concept ) ) . '">';
@@ -524,14 +525,21 @@ class MII_Results {
 	}
 
 	public static function render_rows( string $lang ): string {
-		$min = max( 1, (int) apply_filters( 'mavo_image_results_row_min', self::ROW_MIN ) );
-		$out = '';
+		$min   = max( 1, (int) apply_filters( 'mavo_image_results_row_min', self::ROW_MIN ) );
+		$out   = '';
+		$shown = []; // post IDs already on the page, from rows above.
 
+		// One appearance per article on the whole page (user's decision,
+		// 2026-10-04): rows fill top to bottom in their admin order, and each
+		// skips what an earlier row already shows — so reordering the rows is
+		// how to steer which row keeps a popular article. Concept pages are
+		// untouched; they keep every matching photo.
 		foreach ( self::row_concepts() as $concept ) {
-			$tiles = self::row_tiles( $concept, $lang, self::ROW_TILES, $min );
+			$tiles = self::row_tiles( $concept, $lang, self::ROW_TILES, $min, $shown );
 
 			if ( $tiles ) {
-				$out .= self::render_row( $concept, $lang, $tiles );
+				$out  .= self::render_row( $concept, $lang, $tiles );
+				$shown = array_merge( $shown, array_column( $tiles, 'post_id' ) );
 			}
 		}
 
@@ -544,21 +552,68 @@ class MII_Results {
 
 	/**
 	 * A browse row: the most popular articles using a photo of the concept,
-	 * each with that photo.
+	 * each with its best photo (see ranked_articles()).
 	 *
-	 * Every matching article, from one grouped query over the index — not the
-	 * first page of an image search, which ranks photos and would miss a
-	 * popular article whose matching photo ranks low. Articles are ordered by
-	 * MII_Popularity (views in the same month last year, summed over the
-	 * translation group; then the rolling 90-day views; then newest photo).
+	 * Articles in $exclude are left out before $min and $limit apply, so a
+	 * row whose articles all appear higher up the page disappears rather
+	 * than showing a stub. No photo appears twice in a row.
 	 *
-	 * Per article, the photo is one that is not that article's featured image
-	 * when there is one, strongest match first; articles whose only match is
-	 * their featured image follow all the others.
-	 *
+	 * @param int[] $exclude Post IDs already shown elsewhere on the page.
 	 * @return array<int,array{image:array,post_id:int}> [] when fewer than $min articles match
 	 */
-	public static function row_tiles( string $concept, string $lang, int $limit = self::ROW_TILES, int $min = 1 ): array {
+	public static function row_tiles( string $concept, string $lang, int $limit = self::ROW_TILES, int $min = 1, array $exclude = [] ): array {
+		$articles = self::ranked_articles( $concept, $lang, $exclude );
+
+		if ( count( $articles ) < max( 1, $min ) ) {
+			return [];
+		}
+
+		$refs = [];
+		$used = [];
+
+		// One photo per article, and no photo twice in a row: an article whose
+		// photos are all taken (one picture used in two articles) is skipped.
+		foreach ( $articles as $post_id => $article ) {
+			foreach ( $article['photos'] as $id ) {
+				if ( ! isset( $used[ $id ] ) ) {
+					$used[ $id ] = true;
+					$refs[]      = [ 'attachment_id' => $id, 'post_id' => $post_id ];
+					break;
+				}
+			}
+
+			if ( count( $refs ) >= $limit ) {
+				break;
+			}
+		}
+
+		if ( count( $refs ) < max( 1, $min ) ) {
+			return [];
+		}
+
+		return self::hydrate( $refs, $lang );
+	}
+
+	/**
+	 * Every article in $lang using a photo of the concept, most popular first.
+	 *
+	 * One grouped query over the index — not the first page of an image
+	 * search, which ranks photos and would miss a popular article whose
+	 * matching photo ranks low. Articles are ordered by MII_Popularity (views
+	 * in the same month last year, summed over the translation group; then
+	 * the rolling 90-day views; then the newest photo).
+	 *
+	 * An article's photos are those that are not its featured image, strongest
+	 * match then newest first. An article whose only match is its featured
+	 * image keeps that one, flagged as a fallback, and all such articles come
+	 * after the others: the featured image is what every other tile on the
+	 * site already shows (measured on the live turquoise page: 11 of the first
+	 * 24 tiles had been featured images).
+	 *
+	 * @param int[] $exclude Post IDs to leave out.
+	 * @return array<int,array{photos:int[],fallback:bool}> post_id => article, in order
+	 */
+	public static function ranked_articles( string $concept, string $lang, array $exclude = [] ): array {
 		global $wpdb;
 
 		$rows = $wpdb->get_results( $wpdb->prepare(
@@ -576,48 +631,41 @@ class MII_Results {
 
 		/** Whether an article's featured image may stand in when it has no other match. */
 		$fallback = (bool) apply_filters( 'mavo_image_results_featured_fallback', true, $concept, $lang );
-		$best     = []; // post_id => [ attachment_id, featured, confidence ]
+		$exclude  = array_flip( array_map( 'intval', $exclude ) );
+		$photos   = []; // post_id => [ 'inline' => [ [conf, id], … ], 'featured' => [ … ] ]
 
 		foreach ( (array) $rows as $row ) {
-			$post_id   = (int) $row['post_id'];
-			$candidate = [ (int) $row['attachment_id'], (int) $row['featured'], (float) $row['confidence'] ];
+			$post_id = (int) $row['post_id'];
 
-			if ( $candidate[1] && ! $fallback ) {
+			if ( ! isset( $exclude[ $post_id ] ) ) {
+				$photos[ $post_id ][ (int) $row['featured'] ? 'featured' : 'inline' ][] = [ (float) $row['confidence'], (int) $row['attachment_id'] ];
+			}
+		}
+
+		$articles = [];
+
+		foreach ( $photos as $post_id => $kinds ) {
+			$is_fallback = empty( $kinds['inline'] );
+			$list        = $is_fallback ? ( $kinds['featured'] ?? [] ) : $kinds['inline'];
+
+			if ( ! $list || ( $is_fallback && ! $fallback ) ) {
 				continue;
 			}
 
-			$have = $best[ $post_id ] ?? null;
+			// Strongest match first, then the newer upload.
+			rsort( $list );
 
-			// Not featured beats featured; then stronger match; then newer upload.
-			if ( ! $have || [ -$candidate[1], $candidate[2], $candidate[0] ] > [ -$have[1], $have[2], $have[0] ] ) {
-				$best[ $post_id ] = $candidate;
-			}
+			$articles[ $post_id ] = [ 'photos' => array_column( $list, 1 ), 'fallback' => $is_fallback ];
 		}
 
-		if ( count( $best ) < max( 1, $min ) ) {
-			return [];
-		}
+		$pop = MII_Popularity::for_posts( array_keys( $articles ) );
 
-		$pop = MII_Popularity::for_posts( array_keys( $best ) );
-
-		uksort( $best, static function ( $a, $b ) use ( $best, $pop ) {
-			return [ $best[ $a ][1], -( $pop[ $a ]['season'] ?? 0 ), -( $pop[ $a ]['recent'] ?? 0 ), -$best[ $a ][0] ]
-				<=> [ $best[ $b ][1], -( $pop[ $b ]['season'] ?? 0 ), -( $pop[ $b ]['recent'] ?? 0 ), -$best[ $b ][0] ];
+		uksort( $articles, static function ( $a, $b ) use ( $articles, $pop ) {
+			return [ (int) $articles[ $a ]['fallback'], -( $pop[ $a ]['season'] ?? 0 ), -( $pop[ $a ]['recent'] ?? 0 ), -$articles[ $a ]['photos'][0] ]
+				<=> [ (int) $articles[ $b ]['fallback'], -( $pop[ $b ]['season'] ?? 0 ), -( $pop[ $b ]['recent'] ?? 0 ), -$articles[ $b ]['photos'][0] ];
 		} );
 
-		$best   = array_slice( $best, 0, $limit, true );
-		$images = MII_Images::get_many( array_column( $best, 0 ), [ 'lang' => $lang ] );
-		$tiles  = [];
-
-		_prime_post_caches( array_keys( $best ), false, false );
-
-		foreach ( $best as $post_id => [ $attachment_id ] ) {
-			if ( isset( $images[ $attachment_id ] ) ) {
-				$tiles[] = [ 'image' => $images[ $attachment_id ], 'post_id' => $post_id ];
-			}
-		}
-
-		return $tiles;
+		return $articles;
 	}
 
 	private static function render_row( string $concept, string $lang, array $tiles ): string {
@@ -678,60 +726,67 @@ class MII_Results {
 	}
 
 	/**
-	 * Images for a concept, each paired with the article to link it to, at
-	 * most PER_ARTICLE per article — so one article with fifteen turquoise
-	 * coves does not fill the page.
+	 * The concept grid's tiles, as references: up to $per_article photos per
+	 * article, in the same popularity order as the browse rows.
 	 *
-	 * An article's featured image is what every other tile on the site
-	 * already shows for that article, so it is used only when the article
-	 * has no other photo of the concept, and such fallbacks come after every
-	 * other tile. Measured on the live turquoise_water page before this:
-	 * 11 of the first 24 tiles were featured images, all at the top.
+	 * Dealt in rounds — every article's best photo first, then every second
+	 * photo — so one article's photos are not side by side and the first
+	 * pages show as many different articles as possible. A photo used in two
+	 * articles appears once, under the more popular one.
 	 *
-	 * @param int $per_article At most this many photos of one article.
-	 * @param int $pool        Candidate photos to draw from.
+	 * @return array<int,array{attachment_id:int,post_id:int}>
+	 */
+	public static function tile_refs( string $concept, string $lang, int $per_article = self::PER_ARTICLE ): array {
+		$articles = self::ranked_articles( $concept, $lang );
+		$refs     = [];
+		$used     = []; // attachment_id => post_id it is shown under
+
+		for ( $round = 0; $round < max( 1, $per_article ); $round++ ) {
+			foreach ( $articles as $post_id => $article ) {
+				$mine = array_values( array_filter(
+					$article['photos'],
+					static fn( $id ) => ! isset( $used[ $id ] ) || $used[ $id ] === $post_id
+				) );
+				$id   = $mine[ $round ] ?? null;
+
+				if ( null === $id || isset( $used[ $id ] ) ) {
+					continue;
+				}
+
+				$used[ $id ] = $post_id;
+				$refs[]      = [ 'attachment_id' => $id, 'post_id' => $post_id ];
+			}
+		}
+
+		return $refs;
+	}
+
+	/** The concept grid's tiles, hydrated. */
+	public static function tiles( string $concept, string $lang, int $per_article = self::PER_ARTICLE ): array {
+		return self::hydrate( self::tile_refs( $concept, $lang, $per_article ), $lang );
+	}
+
+	/**
+	 * References to tiles: image objects in one bulk load, posts primed.
+	 *
+	 * @param array<int,array{attachment_id:int,post_id:int}> $refs
 	 * @return array<int,array{image:array,post_id:int}>
 	 */
-	public static function tiles( string $concept, string $lang, int $per_article = self::PER_ARTICLE, int $pool = self::POOL ): array {
-		$results = mavo_image_search( [ 'lang' => $lang, 'concepts' => [ $concept ], 'limit' => $pool ] );
-
-		/** Whether an article's featured image may stand in when it has no other match. */
-		$fallback = (bool) apply_filters( 'mavo_image_results_featured_fallback', true, $concept, $lang );
-
-		$per_post  = [];
-		$tiles     = [];
-		$featured  = [];
-
-		foreach ( $results as $image ) {
-			$post_id = self::article_for( $image, $lang );
-
-			if ( ! $post_id ) {
-				continue;
-			}
-
-			if ( in_array( $post_id, $image['featured_for'], true ) ) {
-				$featured[ $post_id ] = $featured[ $post_id ] ?? $image;
-				continue;
-			}
-
-			if ( ( $per_post[ $post_id ] ?? 0 ) >= $per_article ) {
-				continue;
-			}
-
-			$per_post[ $post_id ] = ( $per_post[ $post_id ] ?? 0 ) + 1;
-			$tiles[]              = [ 'image' => $image, 'post_id' => $post_id ];
+	private static function hydrate( array $refs, string $lang ): array {
+		if ( ! $refs ) {
+			return [];
 		}
 
-		if ( $fallback ) {
-			foreach ( $featured as $post_id => $image ) {
-				if ( ! isset( $per_post[ $post_id ] ) ) {
-					$per_post[ $post_id ] = 1;
-					$tiles[]              = [ 'image' => $image, 'post_id' => $post_id ];
-				}
+		$images = MII_Images::get_many( array_column( $refs, 'attachment_id' ), [ 'lang' => $lang ] );
+		$tiles  = [];
+
+		_prime_post_caches( array_values( array_unique( array_column( $refs, 'post_id' ) ) ), false, false );
+
+		foreach ( $refs as $ref ) {
+			if ( isset( $images[ $ref['attachment_id'] ] ) ) {
+				$tiles[] = [ 'image' => $images[ $ref['attachment_id'] ], 'post_id' => $ref['post_id'] ];
 			}
 		}
-
-		_prime_post_caches( array_keys( $per_post ), false, false );
 
 		return $tiles;
 	}
@@ -739,27 +794,30 @@ class MII_Results {
 	/* ------------------------------------------------------------- private */
 
 	/**
-	 * The article an image is shown in, in this language: preferably one
-	 * where it is not also the featured image, then any.
+	 * A tile's eyebrow: "Country, Region" of the article's place, in the
+	 * article's language — the city a post is tagged with is too specific to
+	 * label a photo with. Either part alone when only one is known.
+	 *
+	 * Filterable, so a later location plugin can choose the level per place
+	 * (London; GB-South; Denmark) without this plugin changing.
 	 */
-	private static function article_for( array $image, string $lang ): int {
-		$best = 0;
+	private static function eyebrow( array $image, int $post_id, string $lang ): string {
+		$context = null;
 
-		foreach ( $image['usages'] as $usage ) {
-			$post_id = (int) $usage['post_id'];
-
-			if ( $usage['lang'] !== $lang ) {
-				continue;
+		foreach ( $image['geo']['candidates'] ?? [] as $candidate ) {
+			if ( (int) $candidate['post_id'] === $post_id ) {
+				$context = $candidate;
+				break;
 			}
-
-			if ( 'content' === $usage['role'] && ! in_array( $post_id, $image['featured_for'], true ) ) {
-				return $post_id;
-			}
-
-			$best = $best ?: $post_id;
 		}
 
-		return $best;
+		$parts = array_filter( [
+			(string) ( $context['country']['name'] ?? '' ),
+			(string) ( $context['region']['name'] ?? '' ),
+		], 'strlen' );
+
+		/** The eyebrow over a results tile: '' for none. */
+		return (string) apply_filters( 'mavo_image_tile_eyebrow', implode( ', ', array_unique( $parts ) ), $post_id, $lang, $context, $image );
 	}
 
 	/**
@@ -779,13 +837,7 @@ class MII_Results {
 			return '';
 		}
 
-		$place = '';
-		foreach ( $image['geo']['candidates'] ?? [] as $context ) {
-			if ( (int) $context['post_id'] === $post_id && ! empty( $context['place']['name'] ) ) {
-				$place = (string) $context['place']['name'];
-				break;
-			}
-		}
+		$place = self::eyebrow( $image, $post_id, $lang );
 
 		$html = '<div class="mv-tile mv-tile--media mavo-image-results__tile">'
 			. '<span class="mv-tile__media"><img class="mv-tile__img" src="' . esc_url( $src ) . '" alt="" loading="lazy" decoding="async"></span>'

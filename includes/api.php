@@ -134,7 +134,7 @@ function mavo_image_get_usages( int $attachment_id, array $args = [] ): array {
 function mavo_image_get_geo_context( int $attachment_id, array $args = [] ): array {
 	$lang  = isset( $args['lang'] ) ? MII_Lang::normalize( (string) $args['lang'] ) : null;
 	$rows  = MII_Usage::for_attachments( [ $attachment_id ] )[ $attachment_id ] ?? [];
-	$names = MII_Geo::place_names( array_column( $rows, 'geo_place' ) );
+	$names = MII_Geo::place_names( MII_Geo::place_terms( $rows ) );
 
 	$context = MII_Geo::summarize( $rows, [ 'post_id' => (int) ( $args['post_id'] ?? 0 ), 'lang' => $lang ], $names );
 

@@ -73,7 +73,7 @@ Filters: `mavo_image_concept_definitions`, `mavo_image_concept_label`,
 `mavo_image_search_results`, `mavo_image_geo_context`, `mavo_image_post_geo`,
 `mavo_image_usage_extract`, `mavo_image_usage_post_types`, `mavo_image_languages`,
 `mavo_image_square_tolerance`, `mavo_image_more_url`, `mavo_image_more_text`,
-`mavo_image_more_strict`, `mavo_image_results_slug`, `mavo_image_results_rows`, `mavo_image_results_row_min`, `mavo_image_results_featured_fallback`, `mavo_image_results_popularity`.
+`mavo_image_more_strict`, `mavo_image_results_slug`, `mavo_image_results_rows`, `mavo_image_results_row_min`, `mavo_image_results_featured_fallback`, `mavo_image_results_popularity`, `mavo_image_tile_eyebrow`.
 
 ## Shortcode and results page
 
@@ -96,7 +96,12 @@ The bare page becomes a browse page once Tools → Image Index → *Browse rows*
 lists concepts: one scrolling row per concept (the theme's `.mv-shelf`), each
 with up to 12 articles shown by their matching photo, most read in the same month
 last year first (translations' views counted together), and a “see all” link to the
-concept grid, followed by the full list of concepts.
+concept grid, followed by the home page's hero buttons. Each article appears **once on
+the whole page**: rows fill in their admin order and skip articles a row above
+already shows, so a row whose articles are all taken disappears — reorder the rows
+to choose which one keeps a popular article. The concept grids use the same popularity
+order and still show up to two photos per article — every article's best photo
+first, then the second ones. Each tile's eyebrow is the article's *country, region*.
 
 `[mavo_image_results]` places the grid inside the page's content (otherwise it is
 appended); `[mavo_image_results concept="garden"]` makes a page for one concept.

@@ -24,8 +24,11 @@ class MII_DB {
 	/**
 	 * Bump whenever install()'s CREATE TABLE statements change, so
 	 * maybe_upgrade() re-runs dbDelta on sites that already have the tables.
+	 *
+	 * 2 — usage.geo_country / geo_region (tile eyebrows). Rows written before
+	 *     carry NULL there until "Rebuild usages" or the post's next save.
 	 */
-	const DB_VERSION        = 1;
+	const DB_VERSION        = 2;
 	const DB_VERSION_OPTION = 'mavo_image_index_db_version';
 
 	public static function items(): string {
@@ -132,6 +135,8 @@ class MII_DB {
 			geo_lat        DECIMAL(10,7) NULL DEFAULT NULL,
 			geo_lng        DECIMAL(10,7) NULL DEFAULT NULL,
 			geo_place      BIGINT UNSIGNED NULL DEFAULT NULL,
+			geo_country    BIGINT UNSIGNED NULL DEFAULT NULL,
+			geo_region     BIGINT UNSIGNED NULL DEFAULT NULL,
 			created_at     DATETIME NOT NULL,
 			updated_at     DATETIME NOT NULL,
 			PRIMARY KEY  (id),
