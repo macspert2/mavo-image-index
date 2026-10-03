@@ -20,8 +20,12 @@ foreach ( [
 	'mavo_image_index_last_rebuild',
 	'mavo_image_index_queue',
 	'mavo_image_index_more_targets',
+	'mavo_image_index_results_page',
+	'mavo_image_index_results_paths',
+	'mavo_image_index_results_flush',
 ] as $option ) {
 	delete_option( $option );
 }
 
 wp_clear_scheduled_hook( 'mavo_image_index_process_queue' );
+delete_option( 'rewrite_rules' ); // rebuilt on the next request, without ours

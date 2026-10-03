@@ -1,0 +1,200 @@
+<?php
+/** The results page: URLs, rules, rendering, SEO, and the shortcode's fallback to it. */
+
+require __DIR__ . '/harness.php';
+require __DIR__ . '/stubs-integrations.php';
+
+global $wpdb;
+
+/* ---------------------------------------------------------------- fixtures */
+
+mii_post( 50, '', [ 'type' => 'page', 'lang' => 'fr' ] );
+mii_post( 51, '', [ 'type' => 'page', 'lang' => 'en' ] );
+mii_post( 52, '', [ 'type' => 'page', 'lang' => 'de', 'status' => 'draft' ] );
+$GLOBALS['MOCK_TRANSLATIONS'][50] = [ 'fr' => 50, 'en' => 51, 'de' => 52 ];
+$GLOBALS['MOCK_TRANSLATIONS'][51] = $GLOBALS['MOCK_TRANSLATIONS'][50];
+$GLOBALS['MOCK_PERMALINKS']       = [ 50 => 'https://example.test/images/', 51 => 'https://example.test/en/pictures/' ];
+
+// One article with five turquoise images, two more articles with one each.
+for ( $i = 1; $i <= 5; $i++ ) {
+	mii_image( $i, 1200, 800, [ 'fr' => "Eaux turquoise $i", 'en' => "Turquoise water $i" ] );
+}
+mii_image( 6, 1200, 800, [ 'fr' => 'Eaux turquoise à Milos' ] );
+mii_image( 7, 1200, 800, [ 'fr' => 'Plage aux eaux turquoise' ] );
+mii_image( 8, 1200, 800, [ 'fr' => 'Jardin' ] );
+mii_image( 9, 1200, 800, [ 'fr' => 'Coucher de soleil' ] );
+
+mii_post( 100, '<img class="wp-image-1"><img class="wp-image-2"><img class="wp-image-3"><img class="wp-image-4"><img class="wp-image-5">', [ 'lang' => 'fr' ] );
+mii_post( 101, '<img class="wp-image-6"><img class="wp-image-9">', [ 'lang' => 'fr' ] );
+mii_post( 102, '<img class="wp-image-7"><img class="wp-image-8">', [ 'lang' => 'fr', 'thumb' => 7 ] );
+mii_post( 110, '<img class="wp-image-1">', [ 'lang' => 'en' ] );
+
+MII_Rebuild::step( 'images', 0, 100 );
+MII_Rebuild::step( 'usages', 0, 100 );
+
+/* ------------------------------------------------------------------ slugs */
+
+same( 'fr slug', 'eaux-turquoise', MII_Results::slug( 'turquoise_water', 'fr' ) );
+same( 'en slug', 'turquoise-water', MII_Results::slug( 'turquoise_water', 'en' ) );
+same( 'de slug transliterates umlauts', 'tuerkisfarbenes-wasser', MII_Results::slug( 'turquoise_water', 'de' ) );
+same( 'de slug with ß', 'weisse-haeuser', MII_Results::slug( 'white_houses', 'de' ) );
+same( 'fr slug drops accents', 'cote', MII_Results::slug( 'coast', 'fr' ) );
+
+foreach ( MII_Lang::languages() as $lang ) {
+	$seen = [];
+	foreach ( MII_Concepts::slugs() as $concept ) {
+		$slug = MII_Results::slug( $concept, $lang );
+		check( "$lang slug unique: $slug", ! isset( $seen[ $slug ] ), [ $concept, $seen[ $slug ] ?? null ] );
+		$seen[ $slug ] = $concept;
+		same( "$lang slug round-trips: $concept", $concept, MII_Results::concept_from_slug( $slug, $lang ) );
+	}
+}
+same( 'concept slug also accepted', 'turquoise_water', MII_Results::concept_from_slug( 'turquoise-water', 'fr' ) );
+same( 'unknown slug', null, MII_Results::concept_from_slug( 'volcan', 'fr' ) );
+
+/* ------------------------------------------------------------ URLs, rules */
+
+same( 'no page configured: no URL', '', MII_Results::url( 'turquoise_water', 'fr' ) );
+
+update_option( MII_Results::PAGE_OPTION, 50 );
+same( 'before rules: query string', 'https://example.test/images/?concept=eaux-turquoise', MII_Results::url( 'turquoise_water', 'fr' ) );
+
+MII_Results::schedule_refresh();
+MII_Results::register_rules();
+same( 'paths from real permalinks, unpublished translation skipped',
+	[ 50 => [ 'path' => 'images', 'lang' => 'fr' ], 51 => [ 'path' => 'en/pictures', 'lang' => 'en' ] ],
+	get_option( MII_Results::PATHS_OPTION ) );
+same( 'rules', [
+	'^images/([^/]+)(?:/([0-9]+))?/?$'      => 'index.php?page_id=50&mii_concept=$matches[1]&mii_page=$matches[2]&lang=fr',
+	'^en/pictures/([^/]+)(?:/([0-9]+))?/?$' => 'index.php?page_id=51&mii_concept=$matches[1]&mii_page=$matches[2]&lang=en',
+], $GLOBALS['MOCK_RULES'] );
+same( 'flushed once', 1, $GLOBALS['MOCK_FLUSHES'] );
+
+$GLOBALS['MOCK_RULES'] = [];
+MII_Results::register_rules();
+same( 'normal requests do not flush', 1, $GLOBALS['MOCK_FLUSHES'] );
+same( 'but still register', 2, count( $GLOBALS['MOCK_RULES'] ) );
+
+MII_Results::schedule_refresh();
+MII_Results::register_rules();
+same( 'unchanged paths do not flush', 1, $GLOBALS['MOCK_FLUSHES'] );
+
+same( 'fr URL', 'https://example.test/images/eaux-turquoise/', MII_Results::url( 'turquoise_water', 'fr' ) );
+same( 'en URL', 'https://example.test/en/pictures/turquoise-water/', MII_Results::url( 'turquoise_water', 'en' ) );
+same( 'page 2', 'https://example.test/images/eaux-turquoise/2/', MII_Results::url( 'turquoise_water', 'fr', 2 ) );
+same( 'untranslated language', '', MII_Results::url( 'turquoise_water', 'de' ) );
+same( 'index URL', 'https://example.test/images/', mavo_image_results_url( '', 'fr' ) );
+
+MII_Results::on_save_page( 51 );
+check( 'editing a translation schedules a refresh', (bool) get_option( MII_Results::FLUSH_OPTION ) );
+MII_Results::refresh_paths();
+MII_Results::on_save_page( 999 );
+check( 'other pages do not', ! get_option( MII_Results::FLUSH_OPTION ) );
+
+/* --------------------------------------------------- [mavo_image_more] */
+
+same( 'the shortcode now links to the results page',
+	'<a class="mavo-image-more mavo-image-more--turquoise-water" href="https://example.test/images/eaux-turquoise/">Voir d’autres plages aux eaux turquoise</a>',
+	MII_Shortcode::render( [ 'concept' => 'turquoise_water', 'text' => 'Voir d’autres plages aux eaux turquoise' ] ) );
+same( 'and in English to the English page', 'https://example.test/en/pictures/turquoise-water/', MII_Shortcode::target_url( 'turquoise_water', 'en' ) );
+same( 'and nothing where no translation exists', '', MII_Shortcode::render( [ 'concept' => 'turquoise_water', 'lang' => 'de' ] ) );
+
+update_option( MII_Shortcode::TARGETS_OPTION, [ 'turquoise_water' => 'https://example.test/custom/' ] );
+same( 'an explicit mapping still wins', 'https://example.test/custom/', MII_Shortcode::target_url( 'turquoise_water', 'fr' ) );
+update_option( MII_Shortcode::TARGETS_OPTION, [] );
+
+/* ------------------------------------------------------------- routing */
+
+function visit( int $page_id, string $slug = '', int $num = 0, string $lang = 'fr' ): void {
+	MII_Results::reset();
+	$GLOBALS['MOCK_DID']['wp'] = 1;
+	$GLOBALS['MOCK_QUERIED']   = $page_id;
+	$GLOBALS['MOCK_QV']        = [ 'mii_concept' => $slug, 'mii_page' => $num ];
+	$GLOBALS['MOCK_LANG']      = $lang;
+	$GLOBALS['MOCK_STATUS']    = 200;
+	$GLOBALS['wp_query']       = new WP_Query_Stub();
+}
+
+visit( 50, 'eaux-turquoise' );
+same( 'current', [ 'page_id' => 50, 'lang' => 'fr', 'concept' => 'turquoise_water', 'page' => 1, 'unknown' => false ], MII_Results::current() );
+
+visit( 101 );
+same( 'other pages are not the results page', null, MII_Results::current() );
+
+MII_Results::reset();
+$GLOBALS['MOCK_DID'] = [];
+same( 'nothing known before the query ran', null, MII_Results::current() );
+
+visit( 50, 'volcan' );
+MII_Results::template_redirect();
+same( 'unknown concept is a 404', [ 404, true ], [ $GLOBALS['MOCK_STATUS'], $GLOBALS['wp_query']->is_404 ] );
+
+visit( 50 );
+$_GET['concept'] = 'eaux-turquoise';
+same( 'query-string fallback', 'turquoise_water', MII_Results::current()['concept'] );
+unset( $_GET['concept'] );
+
+visit( 50, 'eaux-turquoise' );
+same( 'no canonical redirect away from a concept URL', false, MII_Results::redirect_canonical( 'https://example.test/images/' ) );
+same( 'canonical is the concept URL', 'https://example.test/images/eaux-turquoise/', MII_Results::canonical( 'https://example.test/images/' ) );
+same( 'hreflang/switcher points at the same concept', 'https://example.test/en/pictures/turquoise-water/', MII_Results::translation_url( 'https://example.test/en/pictures/', 'en' ) );
+same( 'title', [ 'title' => 'Eaux turquoise – Images' ], MII_Results::title_parts( [ 'title' => 'Images' ] ) );
+same( 'Yoast title', 'Eaux turquoise – Images | Maman Voyage', MII_Results::seo_title( 'Images | Maman Voyage' ) );
+same( 'description', 'Nos photos de voyage en famille : Eaux turquoise.', MII_Results::seo_description( '' ) );
+
+visit( 50 );
+same( 'bare page keeps its canonical', 'https://example.test/images/', MII_Results::canonical( 'https://example.test/images/' ) );
+same( 'bare page keeps its title', [ 'title' => 'Images' ], MII_Results::title_parts( [ 'title' => 'Images' ] ) );
+
+/* -------------------------------------------------------------- rendering */
+
+visit( 50, 'eaux-turquoise' );
+$tiles = MII_Results::tiles( 'turquoise_water', 'fr' );
+$per   = array_count_values( array_column( $tiles, 'post_id' ) );
+same( 'at most two images per article', [ 100 => 2, 101 => 1, 102 => 1 ], ( static function ( $a ) { ksort( $a ); return $a; } )( $per ) );
+
+$html = MII_Results::shortcode( [] );
+check( 'heading', str_contains( $html, '<h2 class="mavo-image-results__title">Eaux turquoise</h2>' ), $html );
+check( 'count', str_contains( $html, '4 photos' ) );
+same( 'tiles', 4, substr_count( $html, 'mavo-image-results__item' ) );
+check( 'tile links to its article', str_contains( $html, '<a href="https://example.test/?p=101">Article 101</a>' ) );
+check( 'alt text in the page language', str_contains( $html, 'alt="Eaux turquoise à Milos"' ) );
+check( 'back to the index', str_contains( $html, 'href="https://example.test/images/">Toutes les thématiques' ) );
+check( 'related: same group, with images', str_contains( $html, '<span>Voir aussi</span> <a href="https://example.test/images/coucher-de-soleil/">Coucher de soleil</a></p>' ), $html );
+check( 'no pagination for one page', ! str_contains( $html, 'mavo-image-results__pages' ) );
+check( 'stylesheet enqueued', in_array( 'mavo-image-results', $GLOBALS['MOCK_STYLES'] ?? [], true ) );
+
+$html = MII_Results::shortcode( [ 'per_page' => 3 ] );
+check( 'pagination', str_contains( $html, 'Page 1 sur 2' ) && str_contains( $html, 'href="https://example.test/images/eaux-turquoise/2/"' ), $html );
+
+visit( 50, 'eaux-turquoise', 2 );
+$html = MII_Results::shortcode( [ 'per_page' => 3 ] );
+same( 'page 2 tiles', 1, substr_count( $html, 'mavo-image-results__item' ) );
+check( 'previous link', str_contains( $html, 'href="https://example.test/images/eaux-turquoise/">← Page précédente' ) );
+
+visit( 51, 'turquoise-water', 0, 'en' );
+$html = MII_Results::shortcode( [] );
+check( 'English page shows English usages only', str_contains( $html, '1 photo' ) && str_contains( $html, 'Article 110' ), $html );
+check( 'English alt', str_contains( $html, 'alt="Turquoise water 1"' ) );
+
+visit( 50 );
+$html = MII_Results::shortcode( [] );
+check( 'index lists concepts with images', str_contains( $html, 'href="https://example.test/images/eaux-turquoise/">Eaux turquoise</a> <span class="mavo-image-results__n">7</span>' ), $html );
+check( 'index includes garden', str_contains( $html, '>Jardins</a>' ) );
+check( 'index omits empty concepts', ! str_contains( $html, 'Châteaux' ) );
+
+visit( 50, 'volcan' );
+same( 'unknown concept renders nothing', '', MII_Results::shortcode( [] ) );
+
+visit( 101 );
+same( 'fixed-concept page', 1, substr_count( MII_Results::shortcode( [ 'concept' => 'garden' ] ), '<h2' ) );
+
+visit( 50, 'eaux-turquoise' );
+check( 'appended to the page when the shortcode is absent', str_contains( MII_Results::append_to_page( '<p>Intro</p>' ), '<p>Intro</p><div class="mavo-image-results' ) );
+same( 'not appended twice', '<p>[mavo_image_results]</p>', MII_Results::append_to_page( '<p>[mavo_image_results]</p>' ) );
+visit( 101 );
+same( 'not appended elsewhere', '<p>x</p>', MII_Results::append_to_page( '<p>x</p>' ) );
+
+same( 'concept counts', [ 'beach' => 1, 'garden' => 1, 'sunset' => 1, 'turquoise_water' => 7 ], ( static function ( $c ) { ksort( $c ); return $c; } )( mavo_image_concept_counts( 'fr' ) ) );
+
+done();

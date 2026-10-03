@@ -81,6 +81,39 @@ class MII_Search {
 		return $results;
 	}
 
+	/**
+	 * Images per concept among images used in posts of one language:
+	 * [ concept => count ]. One grouped query, cached.
+	 */
+	public static function concept_counts( string $lang ): array {
+		global $wpdb;
+
+		$key    = 'counts:' . $lang;
+		$cached = MII_Cache::get( $key );
+
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+
+		$rows = $wpdb->get_results( $wpdb->prepare(
+			'SELECT c.concept, COUNT(DISTINCT c.attachment_id) AS n
+			   FROM ' . MII_DB::concepts() . ' c
+			  WHERE c.attachment_id IN ( SELECT attachment_id FROM ' . MII_DB::usage() . ' WHERE lang = %s )
+			  GROUP BY c.concept',
+			$lang
+		), ARRAY_A );
+
+		$out = [];
+
+		foreach ( (array) $rows as $row ) {
+			$out[ (string) $row['concept'] ] = (int) $row['n'];
+		}
+
+		MII_Cache::set( $key, $out );
+
+		return $out;
+	}
+
 	public static function normalize( array $args ): array {
 		$args = array_merge( self::DEFAULTS, array_intersect_key( $args, self::DEFAULTS ) );
 

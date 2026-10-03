@@ -218,6 +218,23 @@ function mavo_image_concepts( ?string $lang = null ): array {
 	return $out;
 }
 
+/**
+ * How many images carry each concept, among images used in posts of $lang.
+ *
+ * @return array<string,int> slug => images; concepts with none are absent
+ */
+function mavo_image_concept_counts( ?string $lang = null ): array {
+	return MII_Search::concept_counts( MII_Lang::resolve( $lang ) );
+}
+
+/**
+ * The results-page URL for a concept in a language ('' for the page itself).
+ * '' when no results page is configured or translated into that language.
+ */
+function mavo_image_results_url( string $concept = '', ?string $lang = null, int $page = 1 ): string {
+	return MII_Results::url( MII_Concepts::sanitize_slug( $concept ), MII_Lang::resolve( $lang ), $page );
+}
+
 /* ------------------------------------------------------------ maintenance */
 
 /** Reindex one image now. Returns indexed | unchanged | removed | failed. */

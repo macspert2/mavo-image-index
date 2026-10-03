@@ -11,3 +11,5 @@
 .mii__test .large-text { flex: 1 1 auto; }
 .mii__columns { display: flex; flex-wrap: wrap; gap: 16px; }
 .mii__columns .mii__table { flex: 1 1 260px; max-width: 320px; }
+.mii__urls { margin: 0 0 24px; }
+.mii__urls strong { display: inline-block; min-width: 2.5em; }

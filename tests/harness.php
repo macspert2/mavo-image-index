@@ -295,7 +295,10 @@ function shortcode_atts( $pairs, $atts, $tag = '' ) {
 }
 function attachment_url_to_postid( $url ) { return $GLOBALS['MOCK_URL_MAP'][ $url ] ?? 0; }
 function wp_get_attachment_url( $id ) { return "https://example.test/wp-content/uploads/$id.jpg"; }
-function get_permalink( $id ) { return "https://example.test/?p=" . ( is_object( $id ) ? $id->ID : (int) $id ); }
+function get_permalink( $id ) {
+	$id = is_object( $id ) ? $id->ID : (int) $id;
+	return $GLOBALS['MOCK_PERMALINKS'][ $id ] ?? "https://example.test/?p=$id";
+}
 
 function get_post_meta( $id, $key = '', $single = false ) {
 	update_meta_cache( 'post', [ $id ] );
@@ -316,6 +319,35 @@ function get_terms( $args ) {
 	$ids = implode( ',', array_map( 'intval', (array) $args['include'] ) ) ?: '0';
 	return array_map( static fn( $r ) => (object) $r, $wpdb->get_results( "SELECT term_id, name FROM wp_terms WHERE term_id IN ($ids)", ARRAY_A ) );
 }
+
+function wp_unslash( $v ) { return is_string( $v ) ? stripslashes( $v ) : $v; }
+function delete_option( $k ) { unset( $GLOBALS['MOCK_OPTIONS'][ $k ] ); return true; }
+function remove_accents( $s ) { return strtr( (string) $s, [ 'é'=>'e','è'=>'e','ê'=>'e','ë'=>'e','à'=>'a','â'=>'a','ù'=>'u','û'=>'u','ô'=>'o','î'=>'i','ï'=>'i','ç'=>'c','á'=>'a','í'=>'i','ó'=>'o','ú'=>'u' ] ); }
+function sanitize_title( $s ) { return trim( preg_replace( '/[^a-z0-9]+/', '-', strtolower( remove_accents( (string) $s ) ) ), '-' ); }
+function trailingslashit( $s ) { return rtrim( (string) $s, '/' ) . '/'; }
+function add_query_arg( $args, $url ) { return $url . ( str_contains( $url, '?' ) ? '&' : '?' ) . http_build_query( $args ); }
+function home_url( $path = '' ) { return 'https://example.test' . $path; }
+function wp_parse_url( $url, $c = -1 ) { return -1 === $c ? parse_url( $url ) : parse_url( $url, $c ); }
+function add_rewrite_rule( $regex, $query, $after = 'bottom' ) { $GLOBALS['MOCK_RULES'][ $regex ] = $query; }
+function flush_rewrite_rules( $hard = true ) { $GLOBALS['MOCK_FLUSHES'] = ( $GLOBALS['MOCK_FLUSHES'] ?? 0 ) + 1; }
+function remove_action( $tag, $cb, $p = 10 ) { return true; }
+function did_action( $tag ) { return $GLOBALS['MOCK_DID'][ $tag ] ?? 0; }
+function is_page() { return ! empty( $GLOBALS['MOCK_QUERIED'] ); }
+function get_queried_object_id() { return (int) ( $GLOBALS['MOCK_QUERIED'] ?? 0 ); }
+function get_query_var( $k, $d = '' ) { return $GLOBALS['MOCK_QV'][ $k ] ?? $d; }
+function in_the_loop() { return true; }
+function is_main_query() { return true; }
+function has_shortcode( $c, $tag ) { return str_contains( (string) $c, '[' . $tag ); }
+function wp_enqueue_style( ...$a ) { $GLOBALS['MOCK_STYLES'][] = $a[0]; }
+function status_header( $code ) { $GLOBALS['MOCK_STATUS'] = $code; }
+function nocache_headers() {}
+function wp_strip_all_tags( $s ) { return trim( strip_tags( (string) $s ) ); }
+function get_the_title( $id ) { return 'Article ' . ( is_object( $id ) ? $id->ID : (int) $id ); }
+function wp_get_attachment_image( $id, $size = 'thumbnail', $icon = false, $attr = [] ) {
+	return '<img src="https://example.test/wp-content/uploads/' . (int) $id . '.jpg" alt="' . esc_attr( $attr['alt'] ?? '' ) . '" loading="lazy">';
+}
+class WP_Query_Stub { public $is_404 = false; public function set_404() { $this->is_404 = true; } }
+$GLOBALS['wp_query'] = new WP_Query_Stub();
 
 class WP_Post {
 	public $ID;
@@ -340,6 +372,7 @@ require MII_PLUGIN_DIR . 'includes/class-mavo-image-index-status.php';
 require MII_PLUGIN_DIR . 'includes/class-mavo-image-index-rebuild.php';
 require MII_PLUGIN_DIR . 'includes/class-mavo-image-index-sync.php';
 require MII_PLUGIN_DIR . 'includes/class-mavo-image-index-shortcode.php';
+require MII_PLUGIN_DIR . 'includes/class-mavo-image-index-results.php';
 require MII_PLUGIN_DIR . 'includes/api.php';
 
 /* --------------------------------------------------------------- fixtures */

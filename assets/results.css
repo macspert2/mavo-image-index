@@ -1,0 +1,12 @@
+/* Results page: deliberately plain, so the theme's typography carries it. */
+.mavo-image-results__count { opacity: .75; margin-top: -.5em; }
+.mavo-image-results__grid { list-style: none; margin: 1.5em 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 20px; }
+.mavo-image-results__item { margin: 0; }
+.mavo-image-results__item figure { margin: 0; }
+.mavo-image-results__item img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; }
+.mavo-image-results__item figcaption { font-size: .875em; margin-top: .4em; line-height: 1.35; }
+.mavo-image-results__from { opacity: .7; }
+.mavo-image-results__pages { display: flex; flex-wrap: wrap; gap: 1em; justify-content: center; align-items: center; margin: 1.5em 0; }
+.mavo-image-results__related span { font-weight: 600; }
+.mavo-image-results__concepts { list-style: none; margin: 0 0 1.5em; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.mavo-image-results__n { opacity: .6; font-size: .85em; }

@@ -5,7 +5,7 @@ belong, where is it used, and which image best fits a context?* — so galleries
 maps, For You rows and thumbnail pickers stop re-reading alt text, post HTML,
 hub metadata and attachment sizes on their own.
 
-It renders nothing except one link shortcode. Consumers use the procedural API
+Its own front end is one link shortcode and the results page it leads to. Consumers use the procedural API
 in `includes/api.php`, guarded with `function_exists()`.
 
 ## For consumers
@@ -42,6 +42,8 @@ mavo_image_search( [ 'hub' => $hub_id, 'include_hub_descendants' => true ] );
 | `mavo_image_search( $args )` | Image objects + `score` + `matched_concepts` |
 | `mavo_image_best_match( $args )` | One image object or `null` |
 | `mavo_image_concepts( $lang )` | The dictionary: slug ⇒ label, group |
+| `mavo_image_concept_counts( $lang )` | slug ⇒ images used in posts of `$lang` |
+| `mavo_image_results_url( $concept, $lang )` | The results-page URL for a concept, or `''` |
 | `mavo_register_image_concept( $slug, $def )` | Add or extend a concept (on `mavo_image_register_concepts`) |
 
 Every argument is documented on the function in `includes/api.php`.
@@ -71,18 +73,27 @@ Filters: `mavo_image_concept_definitions`, `mavo_image_concept_label`,
 `mavo_image_search_results`, `mavo_image_geo_context`, `mavo_image_post_geo`,
 `mavo_image_usage_extract`, `mavo_image_usage_post_types`, `mavo_image_languages`,
 `mavo_image_square_tolerance`, `mavo_image_more_url`, `mavo_image_more_text`,
-`mavo_image_more_strict`.
+`mavo_image_more_strict`, `mavo_image_results_slug`.
 
-## Shortcode
+## Shortcode and results page
 
 ```text
 [mavo_image_more concept="turquoise_water" text="Voir d’autres plages aux eaux turquoise"]
 ```
 
 A plain same-tab link, classes `mavo-image-more mavo-image-more--turquoise-water`.
-Its target comes from `url=""`, then Tools → Image Index → link targets, then the
-`mavo_image_more_url` filter, then the generic `*` target. With no target it
-prints nothing.
+It leads to the **results page**: choose a page in Tools → Image Index → Results
+page (the French one; its Polylang translations serve en/de). Each concept then
+has its own URL below it — `/images/eaux-turquoise/`,
+`/en/<page>/turquoise-water/` — showing a grid of matching photos, each linking
+to its article. The bare page lists every concept with photos.
+
+Overrides, first match wins: `url=""` on the shortcode, the concept's line in
+*Link targets*, the `mavo_image_more_url` filter, the generic `*` target. With no
+target and no results page in that language, it prints nothing.
+
+`[mavo_image_results]` places the grid inside the page's content (otherwise it is
+appended); `[mavo_image_results concept="garden"]` makes a page for one concept.
 
 ## Operating it
 

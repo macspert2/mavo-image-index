@@ -19,6 +19,7 @@ class MII_Admin {
 		add_action( 'wp_ajax_' . self::AJAX, [ __CLASS__, 'ajax_rebuild' ] );
 		add_action( 'admin_post_mii_rebuild_attachment', [ __CLASS__, 'handle_rebuild_attachment' ] );
 		add_action( 'admin_post_mii_save_targets', [ __CLASS__, 'handle_save_targets' ] );
+		add_action( 'admin_post_mii_save_results_page', [ __CLASS__, 'handle_save_results_page' ] );
 	}
 
 	public static function add_page(): void {
@@ -93,6 +94,22 @@ class MII_Admin {
 		update_option( MII_Shortcode::TARGETS_OPTION, $targets, false );
 
 		self::back( [ 'mii_notice' => 'targets', 'mii_count' => count( $targets ) ] );
+	}
+
+	public static function handle_save_results_page(): void {
+		self::guard( 'mii_save_results_page' );
+
+		$page = absint( $_POST['results_page'] ?? 0 );
+
+		// Stored as the default-language page; the others come from Polylang.
+		if ( $page && function_exists( 'pll_get_post' ) ) {
+			$page = (int) pll_get_post( $page, MII_Lang::default_language() ) ?: $page;
+		}
+
+		update_option( MII_Results::PAGE_OPTION, $page, false );
+		MII_Results::schedule_refresh();
+
+		self::back( [ 'mii_notice' => 'results' ] );
 	}
 
 	/* ---------------------------------------------------------------- page */
@@ -224,6 +241,8 @@ class MII_Admin {
 				<?php endforeach; ?>
 			</div>
 
+			<?php self::render_results_page(); ?>
+
 			<?php self::render_targets(); ?>
 		</div>
 		<?php
@@ -290,6 +309,46 @@ class MII_Admin {
 		<?php
 	}
 
+	private static function render_results_page(): void {
+		$page = (int) get_option( MII_Results::PAGE_OPTION, 0 );
+		?>
+		<h2 id="mii-results"><?php esc_html_e( 'Results page', 'mavo-image-index' ); ?></h2>
+		<p class="description">
+			<?php esc_html_e( 'Where [mavo_image_more] links lead when no other target is set. Choose the French page; its Polylang translations serve English and German. Each concept gets its own URL below it, e.g. /images/eaux-turquoise/. The page shows the results after its own content, or wherever you place [mavo_image_results].', 'mavo-image-index' ); ?>
+		</p>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="mii__inline">
+			<input type="hidden" name="action" value="mii_save_results_page">
+			<?php wp_nonce_field( 'mii_save_results_page' ); ?>
+			<?php
+			wp_dropdown_pages( [
+				'name'              => 'results_page',
+				'selected'          => $page,
+				'show_option_none'  => __( '— none —', 'mavo-image-index' ),
+				'option_none_value' => '0',
+				'lang'              => MII_Lang::default_language(),
+			] );
+			?>
+			<?php submit_button( __( 'Save results page', 'mavo-image-index' ), 'secondary', 'submit', false ); ?>
+		</form>
+
+		<?php if ( $page ) : ?>
+			<ul class="mii__urls">
+				<?php foreach ( MII_Lang::languages() as $lang ) : ?>
+					<?php $example = MII_Results::url( 'turquoise_water', $lang ); ?>
+					<li>
+						<strong><?php echo esc_html( strtoupper( $lang ) ); ?></strong>
+						<?php if ( '' === $example ) : ?>
+							<span class="mii__warn"><?php esc_html_e( 'no published translation — links in this language fall back to other targets or print nothing', 'mavo-image-index' ); ?></span>
+						<?php else : ?>
+							<a href="<?php echo esc_url( $example ); ?>" target="_blank" rel="noopener"><?php echo esc_html( $example ); ?></a>
+						<?php endif; ?>
+					</li>
+				<?php endforeach; ?>
+			</ul>
+		<?php endif; ?>
+		<?php
+	}
+
 	private static function render_targets(): void {
 		$lines = [];
 
@@ -299,7 +358,7 @@ class MII_Admin {
 		?>
 		<h2><?php esc_html_e( 'Link targets for [mavo_image_more]', 'mavo-image-index' ); ?></h2>
 		<p class="description">
-			<?php esc_html_e( 'One per line: “concept = target”. A target is a page ID (translated to the link’s language through Polylang) or a URL. Add “@en” to a concept for a language-specific target. “*” is the fallback for every concept, and may use {concept}, {label} and {lang}. Without a target, the shortcode prints nothing.', 'mavo-image-index' ); ?>
+			<?php esc_html_e( 'Optional, overriding the results page. One per line: “concept = target”. A target is a page ID (translated to the link’s language through Polylang) or a URL. Add “@en” to a concept for a language-specific target. “*” is the fallback for every concept, and may use {concept}, {label} and {lang}. With neither a target nor a results page, the shortcode prints nothing.', 'mavo-image-index' ); ?>
 		</p>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<input type="hidden" name="action" value="mii_save_targets">
@@ -323,6 +382,11 @@ class MII_Admin {
 					absint( $_GET['mii_id'] ?? 0 ),
 					sanitize_key( $_GET['mii_result'] ?? '' )
 				) )
+			);
+		} elseif ( 'results' === $notice ) {
+			printf(
+				'<div class="notice notice-success is-dismissible"><p>%s</p></div>',
+				esc_html__( 'Results page saved. Its URLs are active from the next page load; purge the page cache so existing links pick them up.', 'mavo-image-index' )
 			);
 		} elseif ( 'targets' === $notice ) {
 			printf(

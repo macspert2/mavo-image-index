@@ -2,9 +2,8 @@
 /**
  * [mavo_image_more concept="turquoise_water" text="Voir d’autres plages aux eaux turquoise"]
  *
- * One plain, crawlable link to wherever "more images like this" lives. This
- * plugin has no such page and builds none, so the link goes where it is told,
- * first answer wins:
+ * One plain, crawlable link to wherever "more images like this" lives. First
+ * answer wins:
  *
  *   1. url="…" on the shortcode
  *   2. Tools → Image Index → link targets: the concept, for this language or
@@ -12,6 +11,8 @@
  *   3. the mavo_image_more_url filter (sees the answer so far)
  *   4. the generic destination in the same settings ('*'), which may use
  *      {concept}, {label} and {lang}
+ *   5. the results page (MII_Results), when one is configured — normally
+ *      the only setting needed
  *
  * A target can be a page ID instead of a URL, which is the better choice on a
  * multilingual site: one entry serves every language, through Polylang's
@@ -115,6 +116,11 @@ class MII_Shortcode {
 
 		if ( '' === $url ) {
 			$url = self::resolve_target( self::mapped( '*', $lang ), $concept, $lang );
+		}
+
+		// The plugin's own results page, when one is set up.
+		if ( '' === $url ) {
+			$url = MII_Results::url( $concept, $lang );
 		}
 
 		return $url;

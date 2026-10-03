@@ -28,10 +28,12 @@ agent.md**. Consumer documentation is in `README.md`.
 | `includes/class-mavo-image-index-sync.php` | `MII_Sync`: incremental hooks, shutdown flush, cron overflow |
 | `includes/class-mavo-image-index-cache.php` | `MII_Cache`: request + object cache under a generation number |
 | `includes/class-mavo-image-index-shortcode.php` | `[mavo_image_more]` |
+| `includes/class-mavo-image-index-results.php` | `MII_Results`: the results page, its URLs, rewrite rules, SEO filters |
 | `includes/class-mavo-image-index-admin.php` | Tools → Image Index (admin only) |
 | `includes/class-mavo-image-index-cli.php` | `wp mavo-image-index` (WP-CLI only) |
 | `data/concepts.php` | The starter dictionary (39 concepts, fr/en/de) |
 | `assets/admin.js`, `assets/admin.css` | The rebuild runner and admin styles |
+| `assets/results.css` | Results-page grid |
 | `tests/` | `run.sh`; SQLite-backed harness |
 
 ---
@@ -107,7 +109,40 @@ A page ID maps through `pll_get_post()` to the link's language, so one entry
 serves fr/en/de. An untranslated page yields no link in that language (falls
 through to the generic `*` target) rather than a cross-language link.
 
-### 8. Smaller things
+### 8. A results page lives in this plugin (user's decision, 2026-10-03)
+
+agent.md forbade an explorer page here. In practice `[mavo_image_more]` then had
+nowhere to lead — site search finds articles, not images — so it printed
+nothing. The user chose a server-rendered results page inside this plugin over
+an overlay or a separate consumer plugin.
+
+- One ordinary page (Tools → Image Index → Results page, set as the French
+  page; Polylang translations serve en/de). Results are appended after its
+  content, or placed with `[mavo_image_results]`;
+  `[mavo_image_results concept="garden"]` makes a fixed-concept page.
+- Each concept has its own path in each language's words, e.g.
+  `/images/eaux-turquoise/`, `/en/pictures/turquoise-water/`, `…/2/` for page 2.
+  Paths, not `?concept=`, because Swift Performance's handling of query strings
+  is unknown; a path is cached per concept. `?concept=` is still read as a
+  fallback before rules are flushed.
+- Rules are built from each translation's real permalink path (`/en/` prefix
+  included), so they do not depend on how Polylang rewrites rules. Paths are
+  stored in an option; rules are flushed only when the setting or one of those
+  pages changes. Deactivation deletes `rewrite_rules` so they disappear.
+- Slugs are labels transliterated the German way (ü → ue), independent of the
+  request locale; the concept slug itself (`turquoise-water`) is also accepted.
+  Unknown slugs are 404s.
+- The grid takes up to 100 matches, keeps at most two per article (one article
+  with fifteen coves must not fill the page), links each image to the article
+  using it in the page's language, and paginates 24 per page. Related concepts
+  of the same group and a link back to the index follow.
+- SEO: title and Yoast title/description name the concept; canonical, og:url
+  and Polylang's hreflang/switcher (`pll_translation_url`) point at the concept
+  URL in each language, never the bare page.
+- `[mavo_image_more]` falls back to this page after any explicit or mapped
+  target, so choosing the page is normally the only setting needed.
+
+### 9. Smaller things
 
 - `hero` is a valid role with no detector; whatever renders heroes can add rows
   via `mavo_image_usage_extract`. `gallery` is detected from `[gallery ids]`.
@@ -116,8 +151,8 @@ through to the generic `*` target) rather than a cross-language link.
   mavo-img-srcset, never stored).
 - Visitor-facing text (shortcode) uses per-language arrays, the project
   convention; admin text uses `__()` like mavo-img-srcset's admin.
-- `mavo_image_concepts( $lang )` was added so consumers can list the
-  dictionary without reaching into the registry.
+- `mavo_image_concepts( $lang )`, `mavo_image_concept_counts( $lang )` and
+  `mavo_image_results_url( $concept, $lang )` were added for consumers.
 - Search defaults `same_language => true`, which also excludes images used
   nowhere. `same_language => false` includes them.
 
@@ -173,6 +208,7 @@ therefore kept to what MySQL and SQLite share. Integration stubs (Polylang,
 geotag-plus, mavo-hubs) live in `stubs-integrations.php` and are included only
 by the tests that want them; `test-no-integrations.php` proves degradation.
 
-Not covered by tests: dbDelta itself, the admin screen, WP-CLI output, and
+Not covered by tests: dbDelta itself, the admin screen, WP-CLI output, real
+rewrite matching and Polylang/Yoast behaviour on the results page, and
 MySQL-specific behaviour (collation-insensitive LIKE in text search — MySQL's
 `utf8mb4_unicode_ci` additionally ignores accents there, SQLite does not).
