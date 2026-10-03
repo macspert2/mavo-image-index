@@ -1,0 +1,13 @@
+.mii__table { max-width: 900px; margin-bottom: 16px; }
+.mii__table th, .mii__table td { vertical-align: top; }
+.mii__warn { color: #b32d2e; }
+.mii__facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; max-width: 900px; }
+.mii__facts dt { font-weight: 600; }
+.mii__facts dd { margin: 0; }
+.mii__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.mii__progress { min-height: 1.5em; font-weight: 600; }
+.mii__inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 24px; }
+.mii__test { display: flex; gap: 8px; align-items: center; max-width: 900px; margin-bottom: 12px; }
+.mii__test .large-text { flex: 1 1 auto; }
+.mii__columns { display: flex; flex-wrap: wrap; gap: 16px; }
+.mii__columns .mii__table { flex: 1 1 260px; max-width: 320px; }

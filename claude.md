@@ -1,0 +1,178 @@
+# mavo-image-index — design notes
+
+Built from `agent.md` (a spec written without knowledge of the sibling
+plugins), adapted to how the mavo-* estate actually works. This file records
+what was built and, more importantly, **where and why it differs from
+agent.md**. Consumer documentation is in `README.md`.
+
+---
+
+## Files
+
+| File | Purpose |
+|---|---|
+| `mavo-image-index.php` | Bootstrap: constants, requires, activation, `plugins_loaded` |
+| `includes/api.php` | The public procedural API — the only contract consumers use |
+| `includes/class-mavo-image-index-db.php` | `MII_DB`: the four tables, dbDelta, schema version |
+| `includes/class-mavo-image-index-lang.php` | `MII_Lang`: languages, current language, bulk post languages |
+| `includes/class-mavo-image-index-alt.php` | `MII_Alt`: adapter to the multilingual alt storage |
+| `includes/class-mavo-image-index-concepts.php` | `MII_Concepts`: registry, extension, labels, dictionary version |
+| `includes/class-mavo-image-index-matcher.php` | `MII_Matcher`: normalization, phrase compilation, matching |
+| `includes/class-mavo-image-index-indexer.php` | `MII_Indexer`: items/semantics/concepts rows, dimensions |
+| `includes/class-mavo-image-index-usage.php` | `MII_Usage`: extraction from posts, usage rows |
+| `includes/class-mavo-image-index-geo.php` | `MII_Geo`: Geo Mashup + geotag-plus resolution, the ladder |
+| `includes/class-mavo-image-index-images.php` | `MII_Images`: hydrates image objects in bulk |
+| `includes/class-mavo-image-index-search.php` | `MII_Search`: two-stage search and scoring |
+| `includes/class-mavo-image-index-status.php` | `MII_Status`: indexed / stale / failed / missing |
+| `includes/class-mavo-image-index-rebuild.php` | `MII_Rebuild`: cursor-based batch steps (admin + CLI) |
+| `includes/class-mavo-image-index-sync.php` | `MII_Sync`: incremental hooks, shutdown flush, cron overflow |
+| `includes/class-mavo-image-index-cache.php` | `MII_Cache`: request + object cache under a generation number |
+| `includes/class-mavo-image-index-shortcode.php` | `[mavo_image_more]` |
+| `includes/class-mavo-image-index-admin.php` | Tools → Image Index (admin only) |
+| `includes/class-mavo-image-index-cli.php` | `wp mavo-image-index` (WP-CLI only) |
+| `data/concepts.php` | The starter dictionary (39 concepts, fr/en/de) |
+| `assets/admin.js`, `assets/admin.css` | The rebuild runner and admin styles |
+| `tests/` | `run.sh`; SQLite-backed harness |
+
+---
+
+## Divergences from agent.md
+
+### 1. Hubs and geography follow the live model, not agent.md's
+
+agent.md was written against `mavo-hub-manager`: `_mavo_hub_type`,
+`_mavo_primary_geo_hub`, `_mavo_primary_theme_hub`. **Those keys no longer
+exist.** `mavo-hubs` is live (confirmed 2026-10-03, no return): geographic hubs
+were dropped, geography is the place tree of `mavo-geotag-plus`, and theme hubs
+became an unordered `_mavo_hub` set with no primary.
+
+So:
+
+- Search takes **`place`** (a geotag-plus place = post_tag term ID,
+  `include_place_descendants` default true) and **`hub`** (a mavo-hubs hub post
+  ID, `include_hub_descendants` default false) instead of `geo_hub` /
+  `theme_hub`.
+- "Under a place" is a tag join: geotag-plus attaches every ancestor place to a
+  post, and `mavo_geo_subtree_terms()` is added for posts whose ancestor tags
+  are incomplete.
+- Hub membership comes from `mavo_get_hub_children()` /
+  `mavo_get_hub_descendants()`; per-usage memberships from `mavo_get_hubs()`
+  (`'hubs' => true`). Never raw meta.
+- The geo ladder's `geo_hub` and `country` rungs became
+  `place_city / place_region / place_country / place_continent`.
+- Places have no coordinates, so `lat`/`lng` come only from Geo Mashup
+  (`post_exact`), read from its tables the way geotag-plus and geo-explorer do.
+
+### 2. A fourth table, `mavo_image_items`
+
+Orientation, width and height are search filters, so they need indexed
+columns, not an unserialize of `_wp_attachment_metadata` per candidate. One row
+per image attachment.
+
+### 3. Geography is stored on usage rows
+
+Each usage row carries a snapshot (`geo_precision`, `geo_confidence`,
+`geo_lat/lng`, `geo_place`) resolved at index time. Reading an image's geography
+is then one query, never a hierarchy walk per result. The snapshot is refreshed
+by `set_object_terms` (post_tag, language), `geo_mashup_location_saved` and
+`save_post` (priority 30, after geotag-plus tags at 20).
+
+### 4. Accents are not folded
+
+agent.md asks for matching that is "safe with French accents". Folding would
+be unsafe: côte (coast) / côté (side), marche (walk) / marché (market). Text is
+lowercased and NFC-normalized (so a decomposed é still matches), never folded.
+The dictionary is written with accents.
+
+### 5. Concepts are cross-language evidence
+
+A concept is a fact about the picture. An image with only French alt is still
+a beach for a German search. Each concept row keeps its language and source; the
+API merges them (strongest confidence wins). `$lang` decides labels, alt text
+returned, and — in search, through `same_language` — which posts' usages count.
+`mavo_image_has_concept( $id, $c, $lang )` with a `$lang` restricts evidence to
+that language.
+
+### 6. Alt text comes from mavo-img-srcset's scheme, through an adapter
+
+`_wp_attachment_image_alt` (fr) and `_mavo_alt_{lang}`, owned by
+`Mavo_Alt_Admin` in mavo-img-srcset. `MII_Alt` asks `Mavo_Alt_Admin::meta_key()`
+when callable and falls back to the same scheme, per
+`sharing-between-plugins.md` pattern 3. Polylang media translation is not used
+on this site.
+
+### 7. Shortcode targets may be page IDs
+
+A page ID maps through `pll_get_post()` to the link's language, so one entry
+serves fr/en/de. An untranslated page yields no link in that language (falls
+through to the generic `*` target) rather than a cross-language link.
+
+### 8. Smaller things
+
+- `hero` is a valid role with no detector; whatever renders heroes can add rows
+  via `mavo_image_usage_extract`. `gallery` is detected from `[gallery ids]`.
+- `mavo-picture-tag` is not deployed; its markup is not looked for.
+  `mavo-img-tag` carries no information (it is added at render time by
+  mavo-img-srcset, never stored).
+- Visitor-facing text (shortcode) uses per-language arrays, the project
+  convention; admin text uses `__()` like mavo-img-srcset's admin.
+- `mavo_image_concepts( $lang )` was added so consumers can list the
+  dictionary without reaching into the registry.
+- Search defaults `same_language => true`, which also excludes images used
+  nowhere. `same_language => false` includes them.
+
+---
+
+## Matching
+
+`data/concepts.php` documents the phrase syntax: `plage(s)` optional suffixes,
+`*strand` compound heads, `türkis*` stems (four-letter minimum), weighted
+`[ 'phrase', 0.8 ]`, per-concept `except` vetoes (an overlapping except phrase
+kills a match: *le tour du lac* is not a tower, *Halbinsel* not an island), and
+`implies` (one concept adds another at 0.9×). No dictionary text ever reaches
+`preg_*` as a pattern.
+
+The dictionary version is `md5( MII_Matcher::VERSION . serialize( definitions ) )`.
+Any change — data file, registered concept, filter — makes every semantics row
+stale. Bump `MII_Matcher::VERSION` when the matching *rules* change.
+
+Built from domain knowledge; to be tuned against the real corpus. The user is
+providing a CSV export of all alt texts (fr/en/de by media ID).
+
+## Indexing lifecycle
+
+- **Full**: `MII_Rebuild::step( 'images' | 'usages', $cursor )` — cursor = last
+  ID, so an interrupted rebuild resumes by starting again. The final step
+  deletes rows for attachments/posts that no longer qualify.
+- **Stale**: `MII_Status::stale_ids()` — hash or dictionary mismatch, failed,
+  never indexed, orphaned rows, missing items row. Hashes are compared in SQL
+  (`MD5(meta_value)`).
+- **Incremental**: `MII_Sync` collects IDs from hooks and processes them once at
+  shutdown, at most 20 attachments + 20 posts inline; the rest go to a WP-Cron
+  queue (`mavo_image_index_queue`). Attachment and post deletions are immediate.
+
+## Caching
+
+`MII_Cache`: per-request array + object cache, keys prefixed with a generation
+number (`mavo_image_index_cache_gen`). Any index write bumps it. No transients.
+The only front-end output (the shortcode) is identical for every visitor, so
+Swift Performance page caching is safe.
+
+## Performance (SQLite benchmark, 7,000 images, 1,500 posts)
+
+Single `mavo_image_get`: 4 queries. 20-result searches (AND, filtered, random,
+text): 5–7 queries, independent of result count, 3–11 ms. Random order is a
+seeded affine permutation modulo a prime — deterministic per seed (default:
+changes daily), never `ORDER BY RAND()`.
+
+## Tests
+
+`tests/run.sh` runs each `test-*.php` in its own process against an in-memory
+SQLite `$wpdb` (`tests/harness.php`), so the real SQL runs. The plugin's SQL is
+therefore kept to what MySQL and SQLite share. Integration stubs (Polylang,
+geotag-plus, mavo-hubs) live in `stubs-integrations.php` and are included only
+by the tests that want them; `test-no-integrations.php` proves degradation.
+
+Not covered by tests: dbDelta itself, the admin screen, WP-CLI output, and
+MySQL-specific behaviour (collation-insensitive LIKE in text search — MySQL's
+`utf8mb4_unicode_ci` additionally ignores accents there, SQLite does not).
