@@ -20,6 +20,7 @@ class MII_Admin {
 		add_action( 'admin_post_mii_rebuild_attachment', [ __CLASS__, 'handle_rebuild_attachment' ] );
 		add_action( 'admin_post_mii_save_targets', [ __CLASS__, 'handle_save_targets' ] );
 		add_action( 'admin_post_mii_save_results_page', [ __CLASS__, 'handle_save_results_page' ] );
+		add_action( 'admin_post_mii_save_rows', [ __CLASS__, 'handle_save_rows' ] );
 	}
 
 	public static function add_page(): void {
@@ -110,6 +111,16 @@ class MII_Admin {
 		MII_Results::schedule_refresh();
 
 		self::back( [ 'mii_notice' => 'results' ] );
+	}
+
+	public static function handle_save_rows(): void {
+		self::guard( 'mii_save_rows' );
+
+		$rows = MII_Results::parse_rows( (string) wp_unslash( $_POST['rows'] ?? '' ) );
+
+		update_option( MII_Results::ROWS_OPTION, $rows, false );
+
+		self::back( [ 'mii_notice' => 'rows', 'mii_count' => count( $rows ) ] );
 	}
 
 	/* ---------------------------------------------------------------- page */
@@ -243,6 +254,8 @@ class MII_Admin {
 
 			<?php self::render_results_page(); ?>
 
+			<?php self::render_rows(); ?>
+
 			<?php self::render_targets(); ?>
 		</div>
 		<?php
@@ -349,6 +362,28 @@ class MII_Admin {
 		<?php
 	}
 
+	private static function render_rows(): void {
+		$counts = MII_Search::concept_counts( MII_Lang::default_language() );
+		$known  = [];
+
+		foreach ( MII_Concepts::slugs() as $slug ) {
+			$known[] = $slug . ' (' . (int) ( $counts[ $slug ] ?? 0 ) . ')';
+		}
+		?>
+		<h2 id="mii-rows"><?php esc_html_e( 'Browse rows on the results page', 'mavo-image-index' ); ?></h2>
+		<p class="description">
+			<?php esc_html_e( 'Concepts shown as scrolling rows on the bare results page, one per line, in order. Each row shows up to 12 articles with the photo that matches it; a row with fewer than 4 articles in a language is left out of that language. Empty: the page lists the concepts only.', 'mavo-image-index' ); ?>
+		</p>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="mii_save_rows">
+			<?php wp_nonce_field( 'mii_save_rows' ); ?>
+			<textarea name="rows" rows="8" class="large-text code" placeholder="turquoise_water&#10;colourful_houses&#10;old_town&#10;coastal_path"><?php echo esc_textarea( implode( "\n", MII_Results::row_concepts() ) ); ?></textarea>
+			<p class="description"><?php echo esc_html( sprintf( __( 'Available (images in %s): %s', 'mavo-image-index' ), strtoupper( MII_Lang::default_language() ), implode( ', ', $known ) ) ); ?></p>
+			<?php submit_button( __( 'Save rows', 'mavo-image-index' ), 'secondary' ); ?>
+		</form>
+		<?php
+	}
+
 	private static function render_targets(): void {
 		$lines = [];
 
@@ -387,6 +422,11 @@ class MII_Admin {
 			printf(
 				'<div class="notice notice-success is-dismissible"><p>%s</p></div>',
 				esc_html__( 'Results page saved. Its URLs are active from the next page load; purge the page cache so existing links pick them up.', 'mavo-image-index' )
+			);
+		} elseif ( 'rows' === $notice ) {
+			printf(
+				'<div class="notice notice-success is-dismissible"><p>%s</p></div>',
+				esc_html( sprintf( __( '%d browse rows saved. Purge the page cache to show them.', 'mavo-image-index' ), absint( $_GET['mii_count'] ?? 0 ) ) )
 			);
 		} elseif ( 'targets' === $notice ) {
 			printf(

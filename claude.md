@@ -148,6 +148,19 @@ an overlay or a separate consumer plugin.
   `alt=""` on the img), the index is `mv-tile--text mv-tile--compact` with
   `mv-tile__count`, related/back links are `mv-badge`. `assets/results.css`
   holds only spacing. If the theme renames these classes, this follows.
+- The bare page (no concept) is a browse page (user's decision,
+  2026-10-03): the concepts listed in Tools → Image Index → *Browse rows*, in
+  that order, each as a row of up to 12 articles — one tile per article, with
+  its photo matching the row rather than its featured image — then the full
+  concept list. A row with fewer than 4 articles in a language is skipped in
+  that language (`mavo_image_results_row_min`). Server-rendered and identical
+  for everyone, so cached and indexable, unlike /pour-vous/.
+- Rows are the theme's **`.mv-shelf`** component (CSS in `mv-tiles.css`,
+  arrows in the theme's `js/mv-shelf.js`, registered as `mv-shelf` and
+  enqueued here only when rows render). It was moved out of mavo-for-you's
+  /pour-vous/ page so both pages draw the same row; For You now builds
+  `.mv-shelf` markup and calls `window.mvShelf.enhance()`. Without the theme
+  script the strips still scroll, just without arrows.
 - SEO: title and Yoast title/description name the concept; canonical, og:url
   and Polylang's hreflang/switcher (`pll_translation_url`) point at the concept
   URL in each language, never the bare page.

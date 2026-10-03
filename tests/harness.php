@@ -339,6 +339,8 @@ function get_query_var( $k, $d = '' ) { return $GLOBALS['MOCK_QV'][ $k ] ?? $d; 
 function in_the_loop() { return true; }
 function is_main_query() { return true; }
 function has_shortcode( $c, $tag ) { return str_contains( (string) $c, '[' . $tag ); }
+function wp_script_is( $h, $list = 'enqueued' ) { return 'registered' === $list ? in_array( $h, $GLOBALS['MOCK_REGISTERED'] ?? [], true ) : in_array( $h, $GLOBALS['MOCK_SCRIPTS'] ?? [], true ); }
+function wp_enqueue_script( ...$a ) { $GLOBALS['MOCK_SCRIPTS'][] = $a[0]; }
 function wp_enqueue_style( ...$a ) { $GLOBALS['MOCK_STYLES'][] = $a[0]; }
 function status_header( $code ) { $GLOBALS['MOCK_STATUS'] = $code; }
 function nocache_headers() {}

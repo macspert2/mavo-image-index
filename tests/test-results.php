@@ -224,6 +224,47 @@ same( 'not appended twice', '<p>[mavo_image_results]</p>', MII_Results::append_t
 visit( 101 );
 same( 'not appended elsewhere', '<p>x</p>', MII_Results::append_to_page( '<p>x</p>' ) );
 
+/* ------------------------------------------------------------ browse rows */
+
+same( 'no rows configured: the plain list', 0, substr_count( MII_Results::render_index( 'fr' ), 'mv-shelf' ) );
+
+same( 'rows parsed, unknown and duplicate slugs dropped', [ 'turquoise_water', 'garden', 'beach' ],
+	MII_Results::parse_rows( "turquoise_water\nvolcano\ngarden, beach\nturquoise_water" ) );
+
+update_option( MII_Results::ROWS_OPTION, [ 'turquoise_water', 'garden', 'beach' ] );
+$GLOBALS['MOCK_REGISTERED'] = [ 'mv-shelf' ];
+$GLOBALS['MOCK_SCRIPTS']    = [];
+
+visit( 50 );
+$html = MII_Results::shortcode( [] );
+
+same( 'rows below the minimum are left out', 1, substr_count( $html, '<section class="mv-shelf' ) );
+check( 'shelf markup', str_contains( $html, '<section class="mv-shelf mavo-image-results__row" aria-labelledby="mavo-image-row-turquoise-water" data-mv-shelf-prev="Précédent" data-mv-shelf-next="Suivant"><div class="mv-shelf__head"><h2 class="mv-shelf__title" id="mavo-image-row-turquoise-water">Eaux turquoise</h2><a class="mv-shelf__more" href="https://example.test/images/eaux-turquoise/">Tout voir</a></div><div class="mv-shelf__viewport"><ul class="mv-shelf__track" tabindex="0" aria-label="Eaux turquoise">' ), $html );
+
+preg_match( '#<ul class="mv-shelf__track".*?</ul>#s', $html, $track );
+preg_match_all( '#mv-tile__link" href="https://example.test/\?p=(\d+)"#', $track[0], $links );
+$sorted = $links[1];
+sort( $sorted );
+same( 'one tile per article', [ '100', '101', '102', '103', '105' ], $sorted );
+same( 'featured-only fallback last', '102', end( $links[1] ) );
+check( 'tiles in slides', 5 === substr_count( $track[0], '<li class="mv-shelf__slide"><div class="mv-tile mv-tile--media' ) );
+check( 'theme arrows enqueued', in_array( 'mv-shelf', $GLOBALS['MOCK_SCRIPTS'], true ) );
+check( 'full concept list follows', str_contains( $html, '<h2 class="mavo-image-results__all-title">Toutes les thématiques</h2>' ) && str_contains( $html, 'mv-tile-grid--compact' ) );
+
+visit( 51, '', 0, 'en' );
+same( 'a language without enough articles gets no row, just the list', 0, substr_count( MII_Results::shortcode( [] ), 'mv-shelf' ) );
+
+add_filter( 'mavo_image_results_row_min', static fn() => 1 );
+visit( 50 );
+same( 'row minimum is filterable', 3, substr_count( MII_Results::shortcode( [] ), '<section class="mv-shelf' ) );
+remove_all_filters( 'mavo_image_results_row_min' );
+
+$GLOBALS['MOCK_REGISTERED'] = [];
+$GLOBALS['MOCK_SCRIPTS']    = [];
+visit( 50 );
+check( 'without the theme script the rows still render', str_contains( MII_Results::shortcode( [] ), 'mv-shelf__track' ) && ! $GLOBALS['MOCK_SCRIPTS'] );
+update_option( MII_Results::ROWS_OPTION, [] );
+
 same( 'concept counts', [ 'beach' => 2, 'garden' => 1, 'sea' => 1, 'sunset' => 1, 'turquoise_water' => 10 ], ( static function ( $c ) { ksort( $c ); return $c; } )( mavo_image_concept_counts( 'fr' ) ) );
 
 done();

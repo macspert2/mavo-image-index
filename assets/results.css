@@ -8,3 +8,6 @@
 .mavo-image-results__related { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
 .mavo-image-results__label { margin-right: .25rem; font-weight: 700; color: var(--mv-color-warm, #886353); }
 .mavo-image-results__pages { display: flex; flex-wrap: wrap; gap: 1em; justify-content: center; align-items: center; margin: 0 0 1.5em; }
+
+/* Browse page: rows are the theme's .mv-shelf; this only spaces the list below. */
+.mavo-image-results__all-title { margin-top: 1em; }

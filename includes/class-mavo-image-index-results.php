@@ -43,9 +43,18 @@ class MII_Results {
 	const PATHS_OPTION = 'mavo_image_index_results_paths';
 	const FLUSH_OPTION = 'mavo_image_index_results_flush';
 
+	const ROWS_OPTION  = 'mavo_image_index_browse_rows';
+
 	const PER_PAGE     = 24;
 	const PER_ARTICLE  = 2;
 	const POOL         = 100;
+
+	/** A browse row: up to this many articles, from this many candidate photos… */
+	const ROW_TILES    = 12;
+	const ROW_POOL     = 48;
+
+	/** …and none at all with fewer than this many, in that language. */
+	const ROW_MIN      = 4;
 
 	/** Visitor-facing text, per language (the project's convention, not gettext). */
 	const TEXT = [
@@ -56,6 +65,9 @@ class MII_Results {
 		'from'     => [ 'fr' => 'Article :', 'en' => 'From:', 'de' => 'Artikel:' ],
 		'all'      => [ 'fr' => 'Toutes les thématiques', 'en' => 'All themes', 'de' => 'Alle Themen' ],
 		'related'  => [ 'fr' => 'Voir aussi', 'en' => 'See also', 'de' => 'Siehe auch' ],
+		'more'     => [ 'fr' => 'Tout voir', 'en' => 'See all', 'de' => 'Alle ansehen' ],
+		'prev_row' => [ 'fr' => 'Précédent', 'en' => 'Previous', 'de' => 'Zurück' ],
+		'next_row' => [ 'fr' => 'Suivant', 'en' => 'Next', 'de' => 'Weiter' ],
 		'empty'    => [ 'fr' => 'Aucune photo pour le moment.', 'en' => 'No photos yet.', 'de' => 'Noch keine Fotos.' ],
 		'prev'     => [ 'fr' => '← Page précédente', 'en' => '← Previous page', 'de' => '← Vorherige Seite' ],
 		'next'     => [ 'fr' => 'Page suivante →', 'en' => 'Next page →', 'de' => 'Nächste Seite →' ],
@@ -445,8 +457,101 @@ class MII_Results {
 		return $out . '</div>';
 	}
 
-	/** Every concept with photos, as the theme's compact text tiles. */
+	/**
+	 * The bare results page: the curated browse rows, then every concept.
+	 *
+	 * Rows are the theme's .mv-shelf (mv-tiles.css, arrows from its
+	 * js/mv-shelf.js) — the same row as mavo-for-you's /pour-vous/ page, but
+	 * server-rendered and the same for every visitor, so this page is cached
+	 * and indexed like any other. Each tile is one article, shown with the
+	 * photo of it that matches the row, not its featured image.
+	 */
 	public static function render_index( string $lang ): string {
+		$rows = self::render_rows( $lang );
+		$all  = self::render_concept_list( $lang );
+
+		if ( '' === $rows ) {
+			return $all;
+		}
+
+		return '<div class="mavo-image-results mavo-image-results--browse">' . $rows
+			. '<h2 class="mavo-image-results__all-title">' . esc_html( self::text( 'all', $lang ) ) . '</h2>'
+			. $all . '</div>';
+	}
+
+	/** @return string[] The curated row concepts, in order. */
+	public static function row_concepts(): array {
+		$rows = array_filter( (array) get_option( self::ROWS_OPTION, [] ), [ 'MII_Concepts', 'exists' ] );
+
+		/** The concepts given a row on the results page, in order. */
+		return array_values( array_unique( (array) apply_filters( 'mavo_image_results_rows', $rows ) ) );
+	}
+
+	/** One slug per line, from the admin textarea; unknown slugs dropped. */
+	public static function parse_rows( string $text ): array {
+		$out = [];
+
+		foreach ( preg_split( '/[\s,]+/', $text, -1, PREG_SPLIT_NO_EMPTY ) as $slug ) {
+			$slug = MII_Concepts::sanitize_slug( $slug );
+
+			if ( MII_Concepts::exists( $slug ) && ! in_array( $slug, $out, true ) ) {
+				$out[] = $slug;
+			}
+		}
+
+		return $out;
+	}
+
+	public static function render_rows( string $lang ): string {
+		$min = max( 1, (int) apply_filters( 'mavo_image_results_row_min', self::ROW_MIN ) );
+		$out = '';
+
+		foreach ( self::row_concepts() as $concept ) {
+			$tiles = self::tiles( $concept, $lang, 1, self::ROW_POOL );
+
+			if ( count( $tiles ) < $min ) {
+				continue;
+			}
+
+			$out .= self::render_row( $concept, $lang, array_slice( $tiles, 0, self::ROW_TILES ) );
+		}
+
+		if ( '' !== $out && wp_script_is( 'mv-shelf', 'registered' ) ) {
+			wp_enqueue_script( 'mv-shelf' );
+		}
+
+		return $out;
+	}
+
+	private static function render_row( string $concept, string $lang, array $tiles ): string {
+		$id    = 'mavo-image-row-' . str_replace( '_', '-', $concept );
+		$label = MII_Concepts::label( $concept, $lang );
+		$more  = self::url( $concept, $lang );
+
+		$html = '<section class="mv-shelf mavo-image-results__row" aria-labelledby="' . esc_attr( $id ) . '"'
+			. ' data-mv-shelf-prev="' . esc_attr( self::text( 'prev_row', $lang ) ) . '"'
+			. ' data-mv-shelf-next="' . esc_attr( self::text( 'next_row', $lang ) ) . '">'
+			. '<div class="mv-shelf__head"><h2 class="mv-shelf__title" id="' . esc_attr( $id ) . '">' . esc_html( $label ) . '</h2>';
+
+		if ( '' !== $more ) {
+			$html .= '<a class="mv-shelf__more" href="' . esc_url( $more ) . '">' . esc_html( self::text( 'more', $lang ) ) . '</a>';
+		}
+
+		$html .= '</div><div class="mv-shelf__viewport"><ul class="mv-shelf__track" tabindex="0" aria-label="' . esc_attr( $label ) . '">';
+
+		foreach ( $tiles as $tile ) {
+			$card = self::render_tile( $tile, $lang );
+
+			if ( '' !== $card ) {
+				$html .= '<li class="mv-shelf__slide">' . $card . '</li>';
+			}
+		}
+
+		return $html . '</ul></div></section>';
+	}
+
+	/** Every concept with photos, as the theme's compact text tiles. */
+	public static function render_concept_list( string $lang ): string {
 		$counts = MII_Search::concept_counts( $lang );
 		$tiles  = '';
 
@@ -486,10 +591,12 @@ class MII_Results {
 	 * other tile. Measured on the live turquoise_water page before this:
 	 * 11 of the first 24 tiles were featured images, all at the top.
 	 *
+	 * @param int $per_article At most this many photos of one article.
+	 * @param int $pool        Candidate photos to draw from.
 	 * @return array<int,array{image:array,post_id:int}>
 	 */
-	public static function tiles( string $concept, string $lang ): array {
-		$results = mavo_image_search( [ 'lang' => $lang, 'concepts' => [ $concept ], 'limit' => self::POOL ] );
+	public static function tiles( string $concept, string $lang, int $per_article = self::PER_ARTICLE, int $pool = self::POOL ): array {
+		$results = mavo_image_search( [ 'lang' => $lang, 'concepts' => [ $concept ], 'limit' => $pool ] );
 
 		/** Whether an article's featured image may stand in when it has no other match. */
 		$fallback = (bool) apply_filters( 'mavo_image_results_featured_fallback', true, $concept, $lang );
@@ -510,7 +617,7 @@ class MII_Results {
 				continue;
 			}
 
-			if ( ( $per_post[ $post_id ] ?? 0 ) >= self::PER_ARTICLE ) {
+			if ( ( $per_post[ $post_id ] ?? 0 ) >= $per_article ) {
 				continue;
 			}
 

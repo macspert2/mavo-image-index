@@ -73,7 +73,7 @@ Filters: `mavo_image_concept_definitions`, `mavo_image_concept_label`,
 `mavo_image_search_results`, `mavo_image_geo_context`, `mavo_image_post_geo`,
 `mavo_image_usage_extract`, `mavo_image_usage_post_types`, `mavo_image_languages`,
 `mavo_image_square_tolerance`, `mavo_image_more_url`, `mavo_image_more_text`,
-`mavo_image_more_strict`, `mavo_image_results_slug`.
+`mavo_image_more_strict`, `mavo_image_results_slug`, `mavo_image_results_rows`, `mavo_image_results_row_min`, `mavo_image_results_featured_fallback`.
 
 ## Shortcode and results page
 
@@ -91,6 +91,11 @@ to its article. The bare page lists every concept with photos.
 Overrides, first match wins: `url=""` on the shortcode, the concept's line in
 *Link targets*, the `mavo_image_more_url` filter, the generic `*` target. With no
 target and no results page in that language, it prints nothing.
+
+The bare page becomes a browse page once Tools → Image Index → *Browse rows*
+lists concepts: one scrolling row per concept (the theme's `.mv-shelf`), each
+with up to 12 articles shown by their matching photo and a “see all” link to the
+concept grid, followed by the full list of concepts.
 
 `[mavo_image_results]` places the grid inside the page's content (otherwise it is
 appended); `[mavo_image_results concept="garden"]` makes a page for one concept.
