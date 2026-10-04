@@ -29,7 +29,7 @@ same( 'implied family names its source', 'family_from_behind', $by['family']['im
 /* ---------------------------------------------------------------- boundaries */
 
 same( 'mer not inside merveilleux', [], concepts_of( 'Une vue merveilleuse', 'fr' ) );
-same( 'sea not inside seasonal', [], concepts_of( 'Seasonal market stalls', 'en' ) );
+same( 'sea not inside seasonal', [ 'market' ], concepts_of( 'Seasonal market stalls', 'en' ) );
 same( 'port not inside aéroport or Porto', [], concepts_of( "L'aéroport de Porto", 'fr' ) );
 same( 'lac not inside lacet', [], concepts_of( 'Route en lacets', 'fr' ) );
 check( 'Hamburg is not a castle', ! in_array( 'castle', concepts_of( 'Hafenrundfahrt in Hamburg', 'de' ), true ) );
@@ -39,7 +39,11 @@ same( 'Düsseldorf is not a village', [], concepts_of( 'Altbier in Düsseldorf',
 
 same( 'côte is a coast', [ 'coast' ], concepts_of( 'La côte sauvage au soleil', 'fr' ) );
 check( 'côté is not a coast', ! in_array( 'coast', concepts_of( "De l'autre côté de la rue", 'fr' ), true ) );
-same( 'marché is not a walk', [], concepts_of( 'Le marché du samedi', 'fr' ) );
+same( 'marché is not a walk (it is a market)', [ 'market' ], concepts_of( 'Le marché du samedi', 'fr' ) );
+same( 'a -sur-Mer town is not the sea', [ 'harbour' ], concepts_of( 'Port de Camaret-sur-Mer à marée basse', 'fr' ) );
+same( 'but the sea still is', [ 'sea' ], concepts_of( 'Vue sur la mer à Saint-Malo', 'fr' ) );
+same( 'la tour de Londres is a tower', [ 'tower' ], concepts_of( 'Tour de Londres au bord de la Tamise', 'fr' ) );
+same( 'Parkplatz is not a park or a square', [ 'beach' ], concepts_of( 'Parkplatz am Strand', 'de' ) );
 same( 'uppercase accents fold to lowercase', [ 'island' ], concepts_of( 'ÎLE DE PORQUEROLLES', 'fr' ) );
 same( 'typographic apostrophe splits elision', [ 'turquoise_water' ], concepts_of( 'Une eau turquoise et l’eau claire', 'fr' ) );
 same( 'decomposed é (NFD) still matches', [ 'church' ], concepts_of( "e\u{0301}glise", 'fr' ) );

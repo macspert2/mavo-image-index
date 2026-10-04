@@ -39,3 +39,6 @@ function mavo_get_hub_descendants( int $hub_id, array $args = [] ): array {
 	}
 	return $out;
 }
+
+$GLOBALS['MOCK_TERM_TRANSLATIONS'] = []; // term_id => [ lang => term_id ]
+function pll_get_term( $id, $lang ) { return $GLOBALS['MOCK_TERM_TRANSLATIONS'][ $id ][ $lang ] ?? 0; }

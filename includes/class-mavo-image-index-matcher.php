@@ -30,7 +30,7 @@ class MII_Matcher {
 	 * Part of the dictionary version: bump when matching rules change, so
 	 * every row indexed under the old rules becomes stale.
 	 */
-	const VERSION = '1';
+	const VERSION = '2';
 
 	const MIN_STEM        = 4;
 	const WILDCARD_WEIGHT = 0.9;
@@ -138,11 +138,43 @@ class MII_Matcher {
 			$text = (string) Normalizer::normalize( $text, Normalizer::FORM_C );
 		}
 
+		$text = self::join_names( $text );
 		$text = mb_strtolower( $text, 'UTF-8' );
 		$keep = $keep_wildcards ? '\*' : '';
 		$text = (string) preg_replace( '/[^\p{L}\p{N}' . $keep . ']+/u', ' ', $text );
 
 		return trim( $text );
+	}
+
+	/**
+	 * Hyphenated proper names become one token: Camaret-sur-Mer is a town,
+	 * not the sea; Mont-Saint-Michel not a mountain; Port-Vendres not a port.
+	 * A compound counts as a name when a part after the first is capitalised,
+	 * or when the first is and the compound does not open the text (where any
+	 * word is capitalised). Lowercase compounds — vieille-ville, sous-bois,
+	 * half-timbered — still split into their words. Found in the alt-text
+	 * corpus, 2026-10-04: "-sur-Mer" towns alone made a few dozen false seas.
+	 */
+	private static function join_names( string $text ): string {
+		return (string) preg_replace_callback(
+			'/[\p{L}\p{N}]+(?:[-\x{2010}\x{2011}][\p{L}\p{N}]+)+/u',
+			static function ( array $m ): string {
+				[ $word, $offset ] = $m[0];
+				$parts             = preg_split( '/[-\x{2010}\x{2011}]/u', $word );
+
+				foreach ( $parts as $i => $part ) {
+					if ( preg_match( '/^\p{Lu}/u', $part ) && ( $i > 0 || $offset > 0 ) ) {
+						return implode( '', $parts );
+					}
+				}
+
+				return $word;
+			},
+			$text,
+			-1,
+			$count,
+			PREG_OFFSET_CAPTURE
+		);
 	}
 
 	/** @return string[] */

@@ -42,11 +42,21 @@ class MII_Results {
 	const PAGE_OPTION  = 'mavo_image_index_results_page';
 	const PATHS_OPTION = 'mavo_image_index_results_paths';
 	const FLUSH_OPTION = 'mavo_image_index_results_flush';
+	const RULES_OPTION = 'mavo_image_index_results_rules';
+
+	/** Bump when the rewrite rules change shape, so they are flushed once. 2: place pages. */
+	const RULES_VERSION = 2;
 
 	const ROWS_OPTION  = 'mavo_image_index_browse_rows';
 
 	const PER_PAGE     = 24;
 	const PER_ARTICLE  = 2;
+
+	/**
+	 * On a topic × place page: a place has few articles, so each may show
+	 * more of its photos (still dealt in rounds, one per article at a time).
+	 */
+	const PLACE_PER_ARTICLE = 6;
 
 	/** A browse row: up to this many articles… */
 	const ROW_TILES    = 12;
@@ -64,6 +74,8 @@ class MII_Results {
 		'all'      => [ 'fr' => 'Toutes les thématiques', 'en' => 'All themes', 'de' => 'Alle Themen' ],
 		'related'  => [ 'fr' => 'Voir aussi', 'en' => 'See also', 'de' => 'Siehe auch' ],
 		'more'     => [ 'fr' => 'Tout voir', 'en' => 'See all', 'de' => 'Alle ansehen' ],
+		'in_place' => [ 'fr' => '%1$s : %2$s', 'en' => '%1$s: %2$s', 'de' => '%1$s: %2$s' ],
+		'anywhere' => [ 'fr' => '%s : toutes les destinations', 'en' => '%s: all destinations', 'de' => '%s: alle Reiseziele' ],
 		'prev_row' => [ 'fr' => 'Précédent', 'en' => 'Previous', 'de' => 'Zurück' ],
 		'next_row' => [ 'fr' => 'Suivant', 'en' => 'Next', 'de' => 'Weiter' ],
 		'empty'    => [ 'fr' => 'Aucune photo pour le moment.', 'en' => 'No photos yet.', 'de' => 'Noch keine Fotos.' ],
@@ -93,6 +105,11 @@ class MII_Results {
 		add_filter( 'get_canonical_url', [ __CLASS__, 'canonical' ] );
 		add_filter( 'pll_translation_url', [ __CLASS__, 'translation_url' ], 10, 2 );
 
+		// Place pages (topic × place) are many and often thin: followed, not indexed.
+		add_filter( 'wp_robots', [ __CLASS__, 'robots' ] );
+		add_filter( 'wpseo_robots_array', [ __CLASS__, 'seo_plugin_robots' ] );
+		add_filter( 'rank_math/frontend/robots', [ __CLASS__, 'seo_plugin_robots' ] );
+
 		// mavo-for-you's "Pour vous" block appends itself to eligible pages;
 		// this page is a browse page of its own, not reading material.
 		add_filter( 'mavo_for_you_show_block', [ __CLASS__, 'hide_for_you' ], 10, 2 );
@@ -119,7 +136,7 @@ class MII_Results {
 	 * The URL for a concept (or, with '', the index) in a language. '' when no
 	 * results page exists in that language.
 	 */
-	public static function url( string $concept, string $lang, int $page = 1 ): string {
+	public static function url( string $concept, string $lang, int $page = 1, int $place = 0 ): string {
 		$page_id = self::page_id( $lang );
 
 		if ( ! $page_id ) {
@@ -132,15 +149,31 @@ class MII_Results {
 			return $base;
 		}
 
-		$slug  = self::slug( $concept, $lang );
+		$slug       = self::slug( $concept, $lang );
+		$place_slug = '';
+
+		if ( $place ) {
+			$term = get_term( $place, 'post_tag' );
+
+			if ( ! $term || is_wp_error( $term ) ) {
+				return '';
+			}
+
+			$place_slug = (string) $term->slug;
+		}
+
 		$paths = (array) get_option( self::PATHS_OPTION, [] );
 
 		// Before rules exist for this page, a query string still works.
 		if ( ! isset( $paths[ $page_id ] ) ) {
-			return add_query_arg( array_filter( [ 'concept' => $slug, 'pg' => $page > 1 ? $page : null ] ), $base );
+			return add_query_arg( array_filter( [
+				'concept' => $slug,
+				'place'   => '' !== $place_slug ? $place_slug : null,
+				'pg'      => $page > 1 ? $page : null,
+			] ), $base );
 		}
 
-		return trailingslashit( $base ) . $slug . '/' . ( $page > 1 ? $page . '/' : '' );
+		return trailingslashit( $base ) . $slug . '/' . ( '' !== $place_slug ? rawurlencode( $place_slug ) . '/' : '' ) . ( $page > 1 ? $page . '/' : '' );
 	}
 
 	/**
@@ -180,6 +213,7 @@ class MII_Results {
 
 	public static function query_vars( array $vars ): array {
 		$vars[] = 'mii_concept';
+		$vars[] = 'mii_place';
 		$vars[] = 'mii_page';
 
 		return $vars;
@@ -193,6 +227,11 @@ class MII_Results {
 	public static function register_rules(): void {
 		$changed = get_option( self::FLUSH_OPTION ) ? self::refresh_paths() : false;
 
+		if ( (int) get_option( self::RULES_OPTION, 0 ) !== self::RULES_VERSION ) {
+			update_option( self::RULES_OPTION, self::RULES_VERSION, true );
+			$changed = true;
+		}
+
 		foreach ( (array) get_option( self::PATHS_OPTION, [] ) as $page_id => $info ) {
 			$query = 'index.php?page_id=' . (int) $page_id . '&mii_concept=$matches[1]&mii_page=$matches[2]';
 
@@ -200,7 +239,17 @@ class MII_Results {
 				$query .= '&lang=' . rawurlencode( (string) $info['lang'] );
 			}
 
-			add_rewrite_rule( '^' . preg_quote( (string) $info['path'], '#' ) . '/([^/]+)(?:/([0-9]+))?/?$', $query, 'top' );
+			$path = preg_quote( (string) $info['path'], '#' );
+			$lang = ! empty( $info['lang'] ) && function_exists( 'pll_languages_list' ) ? '&lang=' . rawurlencode( (string) $info['lang'] ) : '';
+
+			// Topic × place: /images/montagnes/madere/[2/]. A place slug never
+			// starts with a digit, so it cannot be mistaken for a page number.
+			add_rewrite_rule(
+				'^' . $path . '/([^/]+)/([^/0-9][^/]*)(?:/([0-9]+))?/?$',
+				'index.php?page_id=' . (int) $page_id . '&mii_concept=$matches[1]&mii_place=$matches[2]&mii_page=$matches[3]' . $lang,
+				'top'
+			);
+			add_rewrite_rule( '^' . $path . '/([^/]+)(?:/([0-9]+))?/?$', $query, 'top' );
 		}
 
 		if ( $changed ) {
@@ -299,24 +348,33 @@ class MII_Results {
 			return null;
 		}
 
-		$slug = (string) get_query_var( 'mii_concept' );
-		$num  = (int) get_query_var( 'mii_page' );
+		$slug       = (string) get_query_var( 'mii_concept' );
+		$place_slug = (string) get_query_var( 'mii_place' );
+		$num        = (int) get_query_var( 'mii_page' );
 
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- public, read-only.
 		if ( '' === $slug && isset( $_GET['concept'] ) ) {
-			$slug = sanitize_title( wp_unslash( $_GET['concept'] ) );
-			$num  = absint( $_GET['pg'] ?? 0 );
+			$slug       = sanitize_title( wp_unslash( $_GET['concept'] ) );
+			$place_slug = sanitize_title( wp_unslash( $_GET['place'] ?? '' ) );
+			$num        = absint( $_GET['pg'] ?? 0 );
 		}
 		// phpcs:enable
 
 		$concept = '' === $slug ? null : self::concept_from_slug( $slug, $lang );
+		$place   = 0;
+
+		if ( '' !== $place_slug ) {
+			$term  = get_term_by( 'slug', sanitize_title( rawurldecode( $place_slug ) ), 'post_tag' );
+			$place = $term && ! is_wp_error( $term ) ? (int) $term->term_id : 0;
+		}
 
 		return self::$current = [
 			'page_id' => $page_id,
 			'lang'    => $lang,
 			'concept' => $concept,
+			'place'   => $place,
 			'page'    => max( 1, $num ),
-			'unknown' => '' !== $slug && null === $concept,
+			'unknown' => ( '' !== $slug && null === $concept ) || ( '' !== $place_slug && ! $place ),
 		];
 	}
 
@@ -370,7 +428,7 @@ class MII_Results {
 			return $url;
 		}
 
-		$canonical = self::url( $current['concept'], $current['lang'], $current['page'] );
+		$canonical = self::url( $current['concept'], $current['lang'], $current['page'], $current['place'] ?? 0 );
 
 		return '' !== $canonical ? $canonical : $url;
 	}
@@ -383,9 +441,42 @@ class MII_Results {
 			return $url;
 		}
 
-		$translated = self::url( $current['concept'], (string) $lang );
+		// The place in the other language, when Polylang has translated the
+		// tag; otherwise the topic page there, not a dead link.
+		$place = (int) ( $current['place'] ?? 0 );
+
+		if ( $place ) {
+			$place = function_exists( 'pll_get_term' ) ? (int) pll_get_term( $place, (string) $lang ) : 0;
+		}
+
+		$translated = self::url( $current['concept'], (string) $lang, 1, $place );
 
 		return '' !== $translated ? $translated : $url;
+	}
+
+	/** Core's robots tag: noindex, follow on topic × place pages. */
+	public static function robots( $robots ) {
+		if ( ! is_array( $robots ) || empty( self::current()['place'] ) ) {
+			return $robots;
+		}
+
+		unset( $robots['index'] );
+		$robots['noindex'] = true;
+		$robots['follow']  = true;
+
+		return $robots;
+	}
+
+	/** Yoast / Rank Math print their own robots tag: same answer there. */
+	public static function seo_plugin_robots( $robots ) {
+		if ( ! is_array( $robots ) || empty( self::current()['place'] ) ) {
+			return $robots;
+		}
+
+		$robots['index']  = 'noindex';
+		$robots['follow'] = 'follow';
+
+		return $robots;
 	}
 
 	/* ------------------------------------------------------------- render */
@@ -409,7 +500,7 @@ class MII_Results {
 		self::enqueue();
 
 		return $concept
-			? self::render_concept( $concept, $lang, $page, max( 1, min( 60, (int) $atts['per_page'] ) ) )
+			? self::render_concept( $concept, $lang, $page, max( 1, min( 60, (int) $atts['per_page'] ) ), (int) ( $current['place'] ?? 0 ) )
 			: self::render_index( $lang );
 	}
 
@@ -422,17 +513,19 @@ class MII_Results {
 		return $content . self::shortcode( [] );
 	}
 
-	public static function render_concept( string $concept, string $lang, int $page = 1, int $per_page = self::PER_PAGE ): string {
+	public static function render_concept( string $concept, string $lang, int $page = 1, int $per_page = self::PER_PAGE, int $place = 0 ): string {
 		// Every tile as a reference, so the count and pagination are exact;
 		// only this page's photos are loaded in full.
-		$refs  = self::tile_refs( $concept, $lang );
+		$refs  = $place
+			? self::tile_refs( $concept, $lang, self::PLACE_PER_ARTICLE, MII_Place::terms( $place ) )
+			: self::tile_refs( $concept, $lang );
 		$total = count( $refs );
 		$pages = max( 1, (int) ceil( $total / $per_page ) );
 		$page  = min( max( 1, $page ), $pages );
 		$tiles = self::hydrate( array_slice( $refs, ( $page - 1 ) * $per_page, $per_page ), $lang );
-		$label = MII_Concepts::label( $concept, $lang );
+		$label = self::heading( $concept, $lang, $place );
 
-		$out  = '<div class="mavo-image-results mavo-image-results--' . esc_attr( str_replace( '_', '-', $concept ) ) . '">';
+		$out  = '<div class="mavo-image-results mavo-image-results--' . esc_attr( str_replace( '_', '-', $concept ) ) . ( $place ? ' mavo-image-results--place' : '' ) . '">';
 		$out .= '<h2 class="mavo-image-results__title">' . esc_html( $label ) . '</h2>';
 		$out .= '<p class="mavo-image-results__count">' . esc_html( 1 === $total ? self::text( 'one', $lang ) : sprintf( self::text( 'count', $lang ), $total ) ) . '</p>';
 
@@ -449,7 +542,27 @@ class MII_Results {
 			$out .= '</div>';
 		}
 
-		$out .= self::render_pagination( $concept, $lang, $page, $pages );
+		$out .= self::render_pagination( $concept, $lang, $page, $pages, $place );
+
+		if ( $place ) {
+			// Out of the place: the topic everywhere, and the place's own page.
+			$links = [];
+			$every = self::url( $concept, $lang );
+			$term  = get_term( $place, 'post_tag' );
+			$home  = $term && ! is_wp_error( $term ) ? get_term_link( $term ) : '';
+
+			if ( '' !== $every ) {
+				$links[] = '<a class="mv-badge mv-badge--neutral" href="' . esc_url( $every ) . '">' . esc_html( sprintf( self::text( 'anywhere', $lang ), MII_Concepts::label( $concept, $lang ) ) ) . '</a>';
+			}
+			if ( is_string( $home ) && '' !== $home ) {
+				$links[] = '<a class="mv-badge mv-badge--warm" href="' . esc_url( $home ) . '">' . esc_html( $term->name ) . '</a>';
+			}
+
+			$out .= $links ? '<p class="mavo-image-results__related">' . implode( ' ', $links ) . '</p>' : '';
+
+			return $out . '</div>';
+		}
+
 		$out .= self::render_related( $concept, $lang );
 
 		$index = self::url( '', $lang );
@@ -611,10 +724,14 @@ class MII_Results {
 	 * 24 tiles had been featured images).
 	 *
 	 * @param int[] $exclude Post IDs to leave out.
+	 * @param int[] $places  Only articles whose own place is one of these
+	 *                       (a place and its subtree, see MII_Place::terms()).
 	 * @return array<int,array{photos:int[],fallback:bool}> post_id => article, in order
 	 */
-	public static function ranked_articles( string $concept, string $lang, array $exclude = [] ): array {
+	public static function ranked_articles( string $concept, string $lang, array $exclude = [], array $places = [] ): array {
 		global $wpdb;
+
+		$in_place = $places ? ' AND u.geo_place IN (' . MII_DB::in_ints( $places ) . ')' : '';
 
 		$rows = $wpdb->get_results( $wpdb->prepare(
 			'SELECT u.post_id, u.attachment_id,
@@ -623,7 +740,7 @@ class MII_Results {
 			   FROM ' . MII_DB::usage() . ' u
 			   JOIN ' . MII_DB::concepts() . ' c ON c.attachment_id = u.attachment_id AND c.concept = %s
 			   JOIN ' . MII_DB::items() . ' i ON i.attachment_id = u.attachment_id
-			  WHERE u.lang = %s
+			  WHERE u.lang = %s' . $in_place . '
 			  GROUP BY u.post_id, u.attachment_id',
 			$concept,
 			$lang
@@ -765,8 +882,8 @@ class MII_Results {
 	 *
 	 * @return array<int,array{attachment_id:int,post_id:int}>
 	 */
-	public static function tile_refs( string $concept, string $lang, int $per_article = self::PER_ARTICLE ): array {
-		$articles = self::ranked_articles( $concept, $lang );
+	public static function tile_refs( string $concept, string $lang, int $per_article = self::PER_ARTICLE, array $places = [] ): array {
+		$articles = self::ranked_articles( $concept, $lang, [], $places );
 		$refs     = [];
 		$used     = []; // attachment_id => post_id it is shown under
 
@@ -932,7 +1049,7 @@ class MII_Results {
 		return ( $space > 40 ? mb_substr( $cut, 0, $space ) : $cut ) . '…';
 	}
 
-	private static function render_pagination( string $concept, string $lang, int $page, int $pages ): string {
+	private static function render_pagination( string $concept, string $lang, int $page, int $pages, int $place = 0 ): string {
 		if ( $pages < 2 ) {
 			return '';
 		}
@@ -940,13 +1057,13 @@ class MII_Results {
 		$out = '<nav class="mavo-image-results__pages">';
 
 		if ( $page > 1 ) {
-			$out .= '<a class="mavo-image-results__prev" href="' . esc_url( self::url( $concept, $lang, $page - 1 ) ) . '">' . esc_html( self::text( 'prev', $lang ) ) . '</a> ';
+			$out .= '<a class="mavo-image-results__prev" href="' . esc_url( self::url( $concept, $lang, $page - 1, $place ) ) . '">' . esc_html( self::text( 'prev', $lang ) ) . '</a> ';
 		}
 
 		$out .= '<span>' . esc_html( sprintf( self::text( 'page', $lang ), $page, $pages ) ) . '</span>';
 
 		if ( $page < $pages ) {
-			$out .= ' <a class="mavo-image-results__next" href="' . esc_url( self::url( $concept, $lang, $page + 1 ) ) . '">' . esc_html( self::text( 'next', $lang ) ) . '</a>';
+			$out .= ' <a class="mavo-image-results__next" href="' . esc_url( self::url( $concept, $lang, $page + 1, $place ) ) . '">' . esc_html( self::text( 'next', $lang ) ) . '</a>';
 		}
 
 		return $out . '</nav>';
@@ -971,10 +1088,29 @@ class MII_Results {
 		return '<p class="mavo-image-results__related"><span class="mavo-image-results__label">' . esc_html( self::text( 'related', $lang ) ) . '</span> ' . implode( ' ', $links ) . '</p>';
 	}
 
+	/** "Montagnes", or "Madère : Montagnes" on a place page. */
+	public static function heading( string $concept, string $lang, int $place = 0 ): string {
+		$label = MII_Concepts::label( $concept, $lang );
+
+		if ( $place ) {
+			$term = get_term( $place, 'post_tag' );
+
+			if ( $term && ! is_wp_error( $term ) ) {
+				return sprintf( self::text( 'in_place', $lang ), $term->name, $label );
+			}
+		}
+
+		return $label;
+	}
+
 	private static function current_label(): ?string {
 		$current = self::current();
 
-		return $current && $current['concept'] ? MII_Concepts::label( $current['concept'], $current['lang'] ) : null;
+		if ( ! $current || ! $current['concept'] ) {
+			return null;
+		}
+
+		return self::heading( $current['concept'], $current['lang'], (int) ( $current['place'] ?? 0 ) );
 	}
 
 	private static function text( string $key, string $lang ): string {

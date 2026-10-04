@@ -29,6 +29,7 @@ agent.md**. Consumer documentation is in `README.md`.
 | `includes/class-mavo-image-index-cache.php` | `MII_Cache`: request + object cache under a generation number |
 | `includes/class-mavo-image-index-shortcode.php` | `[mavo_image_more]` |
 | `includes/class-mavo-image-index-popularity.php` | `MII_Popularity`: seasonal + recent views per article, for row order |
+| `includes/class-mavo-image-index-place.php` | `MII_Place`: "X en images" galleries on place tag archives |
 | `includes/class-mavo-image-index-results.php` | `MII_Results`: the results page, its URLs, rewrite rules, SEO filters |
 | `includes/class-mavo-image-index-admin.php` | Tools → Image Index (admin only) |
 | `includes/class-mavo-image-index-cli.php` | `wp mavo-image-index` (WP-CLI only) |
@@ -208,6 +209,38 @@ lives. Label per language (`En images :` / `In pictures:` / `In Bildern:`),
 `label` attribute and `mavo_image_more_label` filter. If mavo-custom-shortcodes
 renames those classes, this follows; without it the line is unstyled.
 
+### 8c. Place galleries and topic × place pages (2026-10-04)
+
+`MII_Place` (`class-mavo-image-index-place.php`): "Madère en images" — up to
+four of the theme's overlay tiles, one per *distinctive* topic of a place,
+each linking to `/images/{topic}/{place}/`.
+
+- Inserted on tag archives through GeneratePress's `generate_before_loop`
+  (`archive.php` fires it with `'archive'`), because tag archives run no
+  shortcodes; not on page 2+. `[mavo_image_place place="madere"]` elsewhere
+  (landing pages). Filter `mavo_image_place_auto` to switch insertion off.
+- Topics: lift = (concept share of the place's photos) / (its share of the
+  language's photos); needs ≥ 1.3 and ≥ 4 photos; ranked log(lift)·√photos;
+  ≤ 2 per dictionary group; family/children/family_from_behind excluded.
+  Filter `mavo_image_place_topics`.
+- Photos counted are those in articles whose **own** place (usage
+  `geo_place`) lies in the place's subtree — not every article tagged with it,
+  which would let a round-up tagged Madère and Crete add Cretan beaches.
+- No gallery when: the place holds > 25 % of the language's photos (checked
+  with one COUNT before the topic query — the user asked about switching off
+  big places dynamically; this is that, by data rather than level; filter
+  `mavo_image_place_max_share`), fewer than 3 topics qualify, or no results
+  page exists in that language.
+- Topic × place pages: a second rewrite rule per results page
+  (`…/{topic}/{place-slug}/[n/]`; a place slug never starts with a digit, so
+  it cannot be a page number). `RULES_VERSION` forces one flush when the rule
+  set changes. Up to 6 photos per article there (`PLACE_PER_ARTICLE`), and the
+  gallery tile's count is exactly that page's tile count. **noindex, follow**
+  (core, Yoast, Rank Math) — topics × places are many and often thin; the
+  canonical is the page itself; hreflang uses `pll_get_term()` for the place,
+  falling back to the topic page. Links out: the topic everywhere, the place's
+  tag archive.
+
 ### 9. Smaller things
 
 - `hero` is a valid role with no detector; whatever renders heroes can add rows
@@ -244,8 +277,15 @@ The dictionary version is `md5( MII_Matcher::VERSION . serialize( definitions ) 
 Any change — data file, registered concept, filter — makes every semantics row
 stale. Bump `MII_Matcher::VERSION` when the matching *rules* change.
 
-Built from domain knowledge; to be tuned against the real corpus. The user is
-providing a CSV export of all alt texts (fr/en/de by media ID).
+Tuned against the corpus 2026-10-04: `image-alt-registry.csv` (7,977 images,
+fr/en/de; gitignored, kept in the plugin folder, growing). Coverage — alts with
+at least one concept — went from 61/65/56 % to 75/78/68 % (fr/en/de) by adding
+20 concepts from the most frequent unmatched words (bay, valley, hills, park,
+museum, bridge, market, palace, ruins, lighthouse, canal, square, flowers,
+palm_trees, street_art, sculpture, night, snow, autumn, christmas, campervan,
+food), loosening French "tour" (42 → 137 photos), and joining hyphenated
+proper names into one token (`MII_Matcher::join_names()`, matcher version 2):
+"Camaret-sur-Mer" had been the sea, "Mont-Saint-Michel" would be a mountain.
 
 ## Indexing lifecycle
 

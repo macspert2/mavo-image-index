@@ -24,6 +24,7 @@ foreach ( [
 	'mavo_image_index_results_paths',
 	'mavo_image_index_results_flush',
 	'mavo_image_index_browse_rows',
+	'mavo_image_index_results_rules',
 ] as $option ) {
 	delete_option( $option );
 }

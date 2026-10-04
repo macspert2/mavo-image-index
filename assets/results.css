@@ -22,3 +22,15 @@
 	.mavo-image-results__cta .mv-hero__cta-row:has(> :nth-child(3):last-child) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 	.mavo-image-results__cta .mv-button { text-align: center; }
 }
+
+/* "Madère en images" on a place's tag archive: four of the theme's overlay
+   tiles (.mv-tile--overlay, mv-tiles.css) in one row; a swipeable strip on
+   phones rather than four tiles stacked 720px tall. */
+.mavo-image-place { margin: .5rem 0 2rem; }
+.mavo-image-place__title { margin: 0 0 .75rem; font-size: 1.18em; }
+.mavo-image-place__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--mv-tile-gap, 1.25rem); }
+.mavo-image-place__tile .mv-tile__title { font-size: 1.05rem; }
+@media (max-width: 699px) {
+	.mavo-image-place__grid { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px 4px .75rem; gap: .9rem; }
+	.mavo-image-place__grid > .mv-tile { flex: 0 0 min(66vw, 230px); scroll-snap-align: start; }
+}

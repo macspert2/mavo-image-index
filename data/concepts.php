@@ -222,11 +222,16 @@ return [
 		'group'    => 'places',
 		'labels'   => [ 'fr' => 'Tours', 'en' => 'Towers', 'de' => 'Türme' ],
 		'synonyms' => [
-			// French "tour" is a tower only when feminine: "le tour" is a trip
-			// round something, and Tours is a city. Hence articles.
-			'fr' => [ 'la tour', 'une tour', 'les tours', 'des tours', 'cette tour', 'tour de guet', 'tour médiévale', 'tour eiffel', 'donjon(s)' ],
+			// French "tour" is a tower unless masculine — "le tour du lac" is a
+			// walk round it. Requiring an article missed most of the corpus
+			// ("tour de Londres", "tours de pierre", "tour crénelée"), so the
+			// word matches and the masculine uses are vetoed instead.
+			'fr' => [ 'tour(s)', 'tour eiffel', 'donjon(s)', 'tour de guet' ],
 			'en' => [ 'tower(s)', 'watchtower(s)' ],
 			'de' => [ 'turm', 'türme', '*turm', '*türme' ],
+		],
+		'except' => [
+			'fr' => [ 'le tour', 'un tour', 'petit tour', 'ce tour', 'tour du', 'tour en bateau', 'tours en bateau', 'tour à vélo', 'faire le tour' ],
 		],
 	],
 
@@ -255,8 +260,8 @@ return [
 		'group'    => 'places',
 		'labels'   => [ 'fr' => 'Monuments', 'en' => 'Landmarks', 'de' => 'Sehenswürdigkeiten' ],
 		'synonyms' => [
-			'fr' => [ 'monument(s)', [ 'emblématique(s)', 0.8 ], [ 'incontournable(s)', 0.7 ] ],
-			'en' => [ 'landmark(s)', 'monument(s)', [ 'iconic', 0.8 ] ],
+			'fr' => [ 'monument(s)', [ 'emblématique(s)', 0.8 ], [ 'incontournable(s)', 0.7 ], [ 'bâtiment(s) historique(s)', 0.8 ] ],
+			'en' => [ 'landmark(s)', 'monument(s)', [ 'iconic', 0.8 ], [ 'historic building(s)', 0.8 ] ],
 			'de' => [ 'wahrzeichen', 'sehenswürdigkeit(en)', 'denkmal', 'denkmäler', 'monument(e)' ],
 		],
 	],
@@ -456,6 +461,246 @@ return [
 			'fr' => [ 'point(s) de vue', 'belvédère(s)', 'mirador(s)', 'miradouro(s)' ],
 			'en' => [ 'viewpoint(s)', 'lookout(s)', 'viewing platform(s)', 'mirador(s)', 'miradouro(s)' ],
 			'de' => [ 'aussichtspunkt(e)', '*aussichtspunkt(e)', 'aussichtsplattform(en)', 'aussichtsturm', 'miradouro(s)' ],
+		],
+	],
+
+	/* ------------------------------------------- added from the corpus, 2026-10-04
+	 * The most frequent unmatched words in image-alt-registry.csv (7,977
+	 * images) that a visitor would browse by: bay was 167 German alts,
+	 * flowers 123 French, campervans ~85. */
+
+	'bay' => [
+		'group'    => 'landscape',
+		'labels'   => [ 'fr' => 'Baies', 'en' => 'Bays', 'de' => 'Buchten' ],
+		'synonyms' => [
+			'fr' => [ 'baie(s)', 'anse(s)' ],
+			'en' => [ 'bay(s)' ],
+			'de' => [ 'bucht(en)', '*bucht(en)' ],
+		],
+	],
+
+	'valley' => [
+		'group'    => 'landscape',
+		'labels'   => [ 'fr' => 'Vallées', 'en' => 'Valleys', 'de' => 'Täler' ],
+		'synonyms' => [
+			'fr' => [ 'vallée(s)', 'vallon(s)' ],
+			'en' => [ 'valley(s)' ],
+			// Not "*tal": Hospital, Kristall, Metall.
+			'de' => [ 'tal', 'täler', 'flusstal', 'bergtal', 'aostatal' ],
+		],
+	],
+
+	'hills' => [
+		'group'    => 'landscape',
+		'labels'   => [ 'fr' => 'Collines', 'en' => 'Hills', 'de' => 'Hügel' ],
+		'synonyms' => [
+			'fr' => [ 'colline(s)', 'vallonné(e)(s)' ],
+			'en' => [ 'hill(s)', 'hillside(s)', 'hilltop(s)' ],
+			'de' => [ 'hügel', 'hügeln', 'hügellandschaft', 'hügelig*' ],
+		],
+	],
+
+	'park' => [
+		'group'    => 'places',
+		'labels'   => [ 'fr' => 'Parcs', 'en' => 'Parks', 'de' => 'Parks' ],
+		'synonyms' => [
+			'fr' => [ 'parc(s)' ],
+			'en' => [ 'park(s)', 'parkland' ],
+			'de' => [ 'park(s)', '*park' ],
+		],
+		'except' => [
+			'en' => [ 'car park(s)', 'theme park(s)' ],
+			'fr' => [ 'parc d attractions' ],
+			'de' => [ 'parkplatz', 'freizeitpark' ],
+		],
+	],
+
+	'museum' => [
+		'group'    => 'places',
+		'labels'   => [ 'fr' => 'Musées', 'en' => 'Museums', 'de' => 'Museen' ],
+		'synonyms' => [
+			'fr' => [ 'musée(s)' ],
+			'en' => [ 'museum(s)', 'gallery', 'galleries' ],
+			'de' => [ 'museum', 'museen', '*museum', 'galerie' ],
+		],
+	],
+
+	'bridge' => [
+		'group'    => 'places',
+		'labels'   => [ 'fr' => 'Ponts', 'en' => 'Bridges', 'de' => 'Brücken' ],
+		'synonyms' => [
+			'fr' => [ 'pont(s)', 'passerelle(s)' ],
+			'en' => [ 'bridge(s)', 'footbridge(s)' ],
+			'de' => [ 'brücke(n)', '*brücke(n)' ],
+		],
+	],
+
+	'market' => [
+		'group'    => 'places',
+		'labels'   => [ 'fr' => 'Marchés', 'en' => 'Markets', 'de' => 'Märkte' ],
+		'synonyms' => [
+			'fr' => [ 'marché(s)', 'halles' ],
+			'en' => [ 'market(s)', 'market hall(s)' ],
+			'de' => [ 'markt', 'märkte', '*markt', 'markthalle(n)' ],
+		],
+		'except' => [
+			'fr' => [ 'bon marché' ],
+		],
+	],
+
+	'palace' => [
+		'group'    => 'places',
+		'labels'   => [ 'fr' => 'Palais', 'en' => 'Palaces', 'de' => 'Paläste' ],
+		'synonyms' => [
+			'fr' => [ 'palais' ],
+			'en' => [ 'palace(s)' ],
+			'de' => [ 'palast', 'paläste', '*palast', 'palais' ],
+		],
+	],
+
+	'ruins' => [
+		'group'    => 'places',
+		'labels'   => [ 'fr' => 'Ruines', 'en' => 'Ruins', 'de' => 'Ruinen' ],
+		'synonyms' => [
+			'fr' => [ 'ruine(s)', 'vestiges' ],
+			'en' => [ 'ruin(s)', 'ruined' ],
+			'de' => [ 'ruine(n)', '*ruine(n)' ],
+		],
+	],
+
+	'lighthouse' => [
+		'group'    => 'places',
+		'labels'   => [ 'fr' => 'Phares', 'en' => 'Lighthouses', 'de' => 'Leuchttürme' ],
+		'synonyms' => [
+			'fr' => [ 'phare(s)' ],
+			'en' => [ 'lighthouse(s)' ],
+			'de' => [ 'leuchtturm', 'leuchttürme' ],
+		],
+	],
+
+	'canal' => [
+		'group'    => 'places',
+		'labels'   => [ 'fr' => 'Canaux', 'en' => 'Canals', 'de' => 'Kanäle' ],
+		'synonyms' => [
+			'fr' => [ 'canal', 'canaux' ],
+			'en' => [ 'canal(s)' ],
+			'de' => [ 'kanal', 'kanäle', 'gracht(en)' ],
+		],
+	],
+
+	'square' => [
+		'group'    => 'places',
+		'labels'   => [ 'fr' => 'Places', 'en' => 'Squares', 'de' => 'Plätze' ],
+		'synonyms' => [
+			// "place" is also a seat or room: weaker evidence.
+			'fr' => [ [ 'place(s)', 0.8 ], 'grandplace', 'plaza' ],
+			'en' => [ 'square(s)', 'plaza(s)', 'piazza(s)' ],
+			'de' => [ 'platz', 'plätze', '*platz', 'piazza' ],
+		],
+		'except' => [
+			'fr' => [ 'place de parking', 'places de parking', 'sur place' ],
+			'en' => [ 'square metre(s)', 'square meter(s)' ],
+			'de' => [ 'parkplatz', 'spielplatz', 'campingplatz', 'stellplatz', 'zeltplatz', 'sportplatz', 'parkplätze', 'spielplätze' ],
+		],
+	],
+
+	'flowers' => [
+		'group'    => 'visual',
+		'labels'   => [ 'fr' => 'Fleurs', 'en' => 'Flowers', 'de' => 'Blumen' ],
+		'synonyms' => [
+			'fr' => [ 'fleur(s)', 'fleuri(e)(s)', 'lavande' ],
+			'en' => [ 'flower(s)', 'flowering', 'blossom(s)', 'lavender' ],
+			'de' => [ 'blume(n)', '*blumen', 'blüte(n)', 'blühend*', 'lavendel' ],
+		],
+	],
+
+	'palm_trees' => [
+		'group'    => 'visual',
+		'labels'   => [ 'fr' => 'Palmiers', 'en' => 'Palm trees', 'de' => 'Palmen' ],
+		'synonyms' => [
+			'fr' => [ 'palmier(s)', 'palmeraie(s)' ],
+			'en' => [ 'palm tree(s)', 'palm lined', 'palms' ],
+			'de' => [ 'palme(n)', 'palmen*' ],
+		],
+	],
+
+	'street_art' => [
+		'group'    => 'visual',
+		'labels'   => [ 'fr' => 'Street art', 'en' => 'Street art', 'de' => 'Street-Art' ],
+		'synonyms' => [
+			'fr' => [ 'street art', 'fresque(s)', 'graffiti(s)', 'art urbain' ],
+			'en' => [ 'street art', 'mural(s)', 'graffiti' ],
+			'de' => [ 'street art', 'wandbild*', 'wandmalerei(en)', 'graffiti' ],
+		],
+	],
+
+	'sculpture' => [
+		'group'    => 'visual',
+		'labels'   => [ 'fr' => 'Sculptures', 'en' => 'Sculptures', 'de' => 'Skulpturen' ],
+		'synonyms' => [
+			'fr' => [ 'sculpture(s)', 'statue(s)' ],
+			'en' => [ 'sculpture(s)', 'statue(s)' ],
+			'de' => [ 'skulptur(en)', 'statue(n)', '*statue' ],
+		],
+	],
+
+	'night' => [
+		'group'    => 'visual',
+		'labels'   => [ 'fr' => 'De nuit', 'en' => 'By night', 'de' => 'Bei Nacht' ],
+		'synonyms' => [
+			'fr' => [ 'de nuit', 'la nuit', 'illuminé(e)(s)', 'nocturne(s)' ],
+			'en' => [ 'at night', 'by night', 'illuminated', 'lit up' ],
+			'de' => [ 'bei nacht', 'nachts', 'beleuchtet*', 'nächtlich*' ],
+		],
+	],
+
+	'snow' => [
+		'group'    => 'visual',
+		'labels'   => [ 'fr' => 'Neige', 'en' => 'Snow', 'de' => 'Schnee' ],
+		'synonyms' => [
+			'fr' => [ 'neige', 'enneigé(e)(s)', 'ski' ],
+			'en' => [ 'snow', 'snowy', 'snow covered', 'snow capped', 'skiing', 'ski' ],
+			'de' => [ 'schnee', 'verschneit*', 'schneebedeckt*', 'ski*' ],
+		],
+	],
+
+	'autumn' => [
+		'group'    => 'visual',
+		'labels'   => [ 'fr' => 'Automne', 'en' => 'Autumn', 'de' => 'Herbst' ],
+		'synonyms' => [
+			'fr' => [ 'automne', 'automnal(e)(s)', 'automnaux' ],
+			'en' => [ 'autumn', 'autumnal', 'fall foliage' ],
+			'de' => [ 'herbst', 'herbstlich*', '*herbst' ],
+		],
+	],
+
+	'christmas' => [
+		'group'    => 'visual',
+		'labels'   => [ 'fr' => 'Noël', 'en' => 'Christmas', 'de' => 'Weihnachten' ],
+		'synonyms' => [
+			'fr' => [ 'noël', 'marché(s) de noël', 'sapin(s) de noël' ],
+			'en' => [ 'christmas' ],
+			'de' => [ 'weihnacht*', 'advent*' ],
+		],
+	],
+
+	'campervan' => [
+		'group'    => 'activities',
+		'labels'   => [ 'fr' => 'En camping-car', 'en' => 'Campervan', 'de' => 'Wohnmobil' ],
+		'synonyms' => [
+			'fr' => [ 'camping car(s)', 'van(s)', 'fourgon(s) aménagé(s)' ],
+			'en' => [ 'campervan(s)', 'camper van(s)', 'motorhome(s)', 'camper(s)' ],
+			'de' => [ 'wohnmobil(e)', '*wohnmobil', 'campervan', 'camper' ],
+		],
+	],
+
+	'food' => [
+		'group'    => 'activities',
+		'labels'   => [ 'fr' => 'Gastronomie', 'en' => 'Food', 'de' => 'Essen' ],
+		'synonyms' => [
+			'fr' => [ 'servi(e)(s)', 'assiette(s)', 'dégustation(s)', 'gâteau(x)', 'pâtisserie(s)', 'tapas' ],
+			'en' => [ 'served', 'plate of', 'dish(es)', 'cake(s)', 'pastry', 'pastries', 'tapas' ],
+			'de' => [ 'serviert', 'teller', 'gericht(e)', 'kuchen', '*kuchen', 'gebäck', 'tapas' ],
 		],
 	],
 ];

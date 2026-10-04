@@ -363,6 +363,36 @@ class WP_Query_Stub { public $is_404 = false; public function set_404() { $this-
 $GLOBALS['wp_query'] = new WP_Query_Stub();
 
 #[AllowDynamicProperties]
+class WP_Term {
+	public $term_id;
+	public $name;
+	public $slug;
+	public $taxonomy = 'post_tag';
+}
+function mii_term_object( array $row ): WP_Term {
+	$t = new WP_Term();
+	$t->term_id = (int) $row['term_id'];
+	$t->name    = $row['name'];
+	$t->slug    = $row['slug'];
+	return $t;
+}
+function get_term( $id, $taxonomy = '' ) {
+	global $wpdb;
+	$row = $wpdb->get_row( $wpdb->prepare( 'SELECT term_id, name, slug FROM wp_terms WHERE term_id = %d', (int) $id ), ARRAY_A );
+	return $row ? mii_term_object( $row ) : null;
+}
+function get_term_by( $field, $value, $taxonomy = '' ) {
+	global $wpdb;
+	$row = $wpdb->get_row( $wpdb->prepare( 'SELECT t.term_id, t.name, t.slug FROM wp_terms t JOIN wp_term_taxonomy tt ON tt.term_id = t.term_id WHERE t.slug = %s AND tt.taxonomy = %s', $value, $taxonomy ), ARRAY_A );
+	return $row ? mii_term_object( $row ) : false;
+}
+function get_term_link( $term ) { return 'https://example.test/tag/' . $term->slug . '/'; }
+function is_tag() { return ! empty( $GLOBALS['MOCK_TAG'] ); }
+function is_paged() { return ! empty( $GLOBALS['MOCK_PAGED'] ); }
+function get_queried_object() { return ! empty( $GLOBALS['MOCK_TAG'] ) ? get_term( $GLOBALS['MOCK_TAG'] ) : null; }
+function is_wp_error( $x ) { return false; }
+
+#[AllowDynamicProperties]
 class WP_Post {
 	public $ID;
 	public $post_type;
@@ -388,6 +418,7 @@ require MII_PLUGIN_DIR . 'includes/class-mavo-image-index-sync.php';
 require MII_PLUGIN_DIR . 'includes/class-mavo-image-index-shortcode.php';
 require MII_PLUGIN_DIR . 'includes/class-mavo-image-index-popularity.php';
 require MII_PLUGIN_DIR . 'includes/class-mavo-image-index-results.php';
+require MII_PLUGIN_DIR . 'includes/class-mavo-image-index-place.php';
 require MII_PLUGIN_DIR . 'includes/api.php';
 
 /* --------------------------------------------------------------- fixtures */

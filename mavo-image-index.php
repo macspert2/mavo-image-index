@@ -34,6 +34,7 @@ require_once MII_PLUGIN_DIR . 'includes/class-mavo-image-index-sync.php';
 require_once MII_PLUGIN_DIR . 'includes/class-mavo-image-index-shortcode.php';
 require_once MII_PLUGIN_DIR . 'includes/class-mavo-image-index-popularity.php';
 require_once MII_PLUGIN_DIR . 'includes/class-mavo-image-index-results.php';
+require_once MII_PLUGIN_DIR . 'includes/class-mavo-image-index-place.php';
 require_once MII_PLUGIN_DIR . 'includes/api.php';
 
 register_activation_hook( __FILE__, static function () {
@@ -56,6 +57,7 @@ add_action( 'plugins_loaded', static function () {
 	// mavo_image_register_concepts.
 	add_action( 'init', [ 'MII_Shortcode', 'init' ] );
 	MII_Results::init();
+	MII_Place::init();
 
 	if ( is_admin() ) {
 		require_once MII_PLUGIN_DIR . 'includes/class-mavo-image-index-admin.php';

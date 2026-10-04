@@ -73,15 +73,19 @@ same( 'paths from real permalinks, unpublished translation skipped',
 	[ 50 => [ 'path' => 'images', 'lang' => 'fr' ], 51 => [ 'path' => 'en/pictures', 'lang' => 'en' ] ],
 	get_option( MII_Results::PATHS_OPTION ) );
 same( 'rules', [
-	'^images/([^/]+)(?:/([0-9]+))?/?$'      => 'index.php?page_id=50&mii_concept=$matches[1]&mii_page=$matches[2]&lang=fr',
-	'^en/pictures/([^/]+)(?:/([0-9]+))?/?$' => 'index.php?page_id=51&mii_concept=$matches[1]&mii_page=$matches[2]&lang=en',
+	'^images/([^/]+)/([^/0-9][^/]*)(?:/([0-9]+))?/?$'      => 'index.php?page_id=50&mii_concept=$matches[1]&mii_place=$matches[2]&mii_page=$matches[3]&lang=fr',
+	'^images/([^/]+)(?:/([0-9]+))?/?$'                     => 'index.php?page_id=50&mii_concept=$matches[1]&mii_page=$matches[2]&lang=fr',
+	'^en/pictures/([^/]+)/([^/0-9][^/]*)(?:/([0-9]+))?/?$' => 'index.php?page_id=51&mii_concept=$matches[1]&mii_place=$matches[2]&mii_page=$matches[3]&lang=en',
+	'^en/pictures/([^/]+)(?:/([0-9]+))?/?$'                => 'index.php?page_id=51&mii_concept=$matches[1]&mii_page=$matches[2]&lang=en',
 ], $GLOBALS['MOCK_RULES'] );
+check( 'place rule: a page number is not a place', ! preg_match( '#^images/([^/]+)/([^/0-9][^/]*)(?:/([0-9]+))?/?$#', 'images/eaux-turquoise/2/' ) );
+check( 'place rule matches a place', (bool) preg_match( '#^images/([^/]+)/([^/0-9][^/]*)(?:/([0-9]+))?/?$#', 'images/eaux-turquoise/madere/2/' ) );
 same( 'flushed once', 1, $GLOBALS['MOCK_FLUSHES'] );
 
 $GLOBALS['MOCK_RULES'] = [];
 MII_Results::register_rules();
 same( 'normal requests do not flush', 1, $GLOBALS['MOCK_FLUSHES'] );
-same( 'but still register', 2, count( $GLOBALS['MOCK_RULES'] ) );
+same( 'but still register', 4, count( $GLOBALS['MOCK_RULES'] ) );
 
 MII_Results::schedule_refresh();
 MII_Results::register_rules();
@@ -124,7 +128,7 @@ function visit( int $page_id, string $slug = '', int $num = 0, string $lang = 'f
 }
 
 visit( 50, 'eaux-turquoise' );
-same( 'current', [ 'page_id' => 50, 'lang' => 'fr', 'concept' => 'turquoise_water', 'page' => 1, 'unknown' => false ], MII_Results::current() );
+same( 'current', [ 'page_id' => 50, 'lang' => 'fr', 'concept' => 'turquoise_water', 'place' => 0, 'page' => 1, 'unknown' => false ], MII_Results::current() );
 
 visit( 101 );
 same( 'other pages are not the results page', null, MII_Results::current() );
