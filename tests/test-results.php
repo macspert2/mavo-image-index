@@ -386,4 +386,13 @@ same( 'unknown post', '', $excerpt->invoke( null, 999999 ) );
 
 same( 'concept counts', [ 'beach' => 2, 'garden' => 1, 'sea' => 1, 'sunset' => 1, 'turquoise_water' => 10 ], ( static function ( $c ) { ksort( $c ); return $c; } )( mavo_image_concept_counts( 'fr' ) ) );
 
+/* ---- one row on its own, for another page (mavo-search) ---- */
+
+$row = mavo_image_concept_row( 'turquoise_water', 'fr', [ 'title' => 'Eaux turquoise en photos', 'limit' => 2, 'min' => 1, 'class' => 'mv-search-photos x"y' ] );
+check( 'concept row: a shelf with the given title', str_contains( $row, '<section class="mv-shelf mavo-image-results__row mv-search-photos xy"' ) && str_contains( $row, '>Eaux turquoise en photos</h2>' ), $row );
+same( 'concept row: limit', 2, substr_count( $row, '<li class="mv-shelf__slide">' ) );
+same( 'concept row: too few articles, nothing', '', mavo_image_concept_row( 'turquoise_water', 'fr', [ 'min' => 99 ] ) );
+same( 'concept row: unknown concept, nothing', '', mavo_image_concept_row( 'no_such_concept', 'fr' ) );
+check( 'concept row: default title is the label', str_contains( mavo_image_concept_row( 'turquoise_water', 'fr', [ 'min' => 1 ] ), '>' . MII_Concepts::label( 'turquoise_water', 'fr' ) . '</h2>' ) );
+
 done();

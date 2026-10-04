@@ -258,6 +258,21 @@ function mavo_image_results_url( string $concept = '', ?string $lang = null, int
 	return MII_Results::url( MII_Concepts::sanitize_slug( $concept ), MII_Lang::resolve( $lang ), $page );
 }
 
+/**
+ * One browse row of a concept, ready to print: the theme's .mv-shelf of the
+ * most popular articles in $lang with a photo of it, each shown by that photo,
+ * and a "see all" link to the concept's results page. '' when fewer than
+ * `min` articles qualify. mavo-search prints one beside the results of a
+ * query that is exactly a concept ("eaux turquoise").
+ *
+ * @param array $args title (default the concept's label), limit (default 12),
+ *                    min (default 4, filter mavo_image_results_row_min),
+ *                    exclude (post IDs), class (extra classes)
+ */
+function mavo_image_concept_row( string $concept, ?string $lang = null, array $args = [] ): string {
+	return MII_Results::concept_row( MII_Concepts::sanitize_slug( $concept ), MII_Lang::resolve( $lang ), $args );
+}
+
 /* ------------------------------------------------------------ maintenance */
 
 /** Reindex one image now. Returns indexed | unchanged | removed | failed. */

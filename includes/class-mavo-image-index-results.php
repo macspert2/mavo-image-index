@@ -668,12 +668,41 @@ class MII_Results {
 		return $articles;
 	}
 
-	private static function render_row( string $concept, string $lang, array $tiles ): string {
-		$id    = 'mavo-image-row-' . str_replace( '_', '-', $concept );
-		$label = MII_Concepts::label( $concept, $lang );
-		$more  = self::url( $concept, $lang );
+	/**
+	 * One browse row on its own, for another page: the same .mv-shelf, the
+	 * same popular-first articles and photos, the same "see all" link. ''
+	 * when fewer than $args['min'] articles have a photo of the concept.
+	 *
+	 * @param array $args title (default the concept's label), limit (12),
+	 *                    min (mavo_image_results_row_min, 4), exclude (post IDs),
+	 *                    class (extra classes on the section)
+	 */
+	public static function concept_row( string $concept, string $lang, array $args = [] ): string {
+		if ( ! isset( MII_Concepts::all()[ $concept ] ) ) {
+			return '';
+		}
 
-		$html = '<section class="mv-shelf mavo-image-results__row" aria-labelledby="' . esc_attr( $id ) . '"'
+		$min   = (int) ( $args['min'] ?? apply_filters( 'mavo_image_results_row_min', self::ROW_MIN ) );
+		$tiles = self::row_tiles( $concept, $lang, max( 1, (int) ( $args['limit'] ?? self::ROW_TILES ) ), max( 1, $min ), array_map( 'intval', (array) ( $args['exclude'] ?? [] ) ) );
+
+		if ( ! $tiles ) {
+			return '';
+		}
+
+		if ( wp_script_is( 'mv-shelf', 'registered' ) ) {
+			wp_enqueue_script( 'mv-shelf' );
+		}
+
+		return self::render_row( $concept, $lang, $tiles, (string) ( $args['title'] ?? '' ), (string) ( $args['class'] ?? '' ) );
+	}
+
+	private static function render_row( string $concept, string $lang, array $tiles, string $title = '', string $class = '' ): string {
+		$id    = 'mavo-image-row-' . str_replace( '_', '-', $concept );
+		$label = '' !== $title ? $title : MII_Concepts::label( $concept, $lang );
+		$more  = self::url( $concept, $lang );
+		$class = trim( 'mv-shelf mavo-image-results__row ' . implode( ' ', array_map( 'sanitize_html_class', preg_split( '/\s+/', $class ) ?: [] ) ) );
+
+		$html = '<section class="' . esc_attr( $class ) . '" aria-labelledby="' . esc_attr( $id ) . '"'
 			. ' data-mv-shelf-prev="' . esc_attr( self::text( 'prev_row', $lang ) ) . '"'
 			. ' data-mv-shelf-next="' . esc_attr( self::text( 'next_row', $lang ) ) . '">'
 			. '<div class="mv-shelf__head"><h2 class="mv-shelf__title" id="' . esc_attr( $id ) . '">' . esc_html( $label ) . '</h2>';
