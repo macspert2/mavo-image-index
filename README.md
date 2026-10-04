@@ -73,7 +73,7 @@ Filters: `mavo_image_concept_definitions`, `mavo_image_concept_label`,
 `mavo_image_search_results`, `mavo_image_geo_context`, `mavo_image_post_geo`,
 `mavo_image_usage_extract`, `mavo_image_usage_post_types`, `mavo_image_languages`,
 `mavo_image_square_tolerance`, `mavo_image_more_url`, `mavo_image_more_text`,
-`mavo_image_more_strict`, `mavo_image_results_slug`, `mavo_image_results_rows`, `mavo_image_results_row_min`, `mavo_image_results_featured_fallback`, `mavo_image_results_popularity`, `mavo_image_tile_eyebrow`.
+`mavo_image_more_strict`, `mavo_image_results_slug`, `mavo_image_results_rows`, `mavo_image_results_row_min`, `mavo_image_results_featured_fallback`, `mavo_image_results_popularity`, `mavo_image_tile_eyebrow`, `mavo_image_tile_excerpt`.
 
 ## Shortcode and results page
 

@@ -156,6 +156,10 @@ same( 'bare page keeps its title', [ 'title' => 'Images' ], MII_Results::title_p
 
 /* -------------------------------------------------------------- rendering */
 
+$GLOBALS['MOCK_EXCERPTS'] = [
+	101 => '<p>Une semaine à Milos,   entre criques et villages.</p>',
+	100 => str_repeat( 'Un mot ', 17 ) . 'dernier mot qui dépasse largement la limite des cent trente caractères',
+];
 visit( 50, 'eaux-turquoise' );
 $tiles = MII_Results::tiles( 'turquoise_water', 'fr' );
 $per   = array_count_values( array_column( $tiles, 'post_id' ) );
@@ -189,9 +193,13 @@ check( 'heading', str_contains( $html, '<h2 class="mavo-image-results__title">Ea
 check( 'count', str_contains( $html, '6 photos' ) );
 same( 'tiles', 6, substr_count( $html, 'class="mv-tile mv-tile--media mavo-image-results__tile"' ) );
 check( 'theme grid', str_contains( $html, '<div class="mv-tile-grid mv-grid mv-grid--3 mavo-image-results__grid">' ) );
-check( 'theme tile anatomy', str_contains( $html, '<span class="mv-tile__media"><img class="mv-tile__img" src="https://example.test/wp-content/uploads/6-medium_large.jpg" alt="" loading="lazy" decoding="async"></span>' ), $html );
+check( 'theme tile anatomy', str_contains( $html, '<span class="mv-tile__media"><img class="mv-tile__img" src="https://example.test/wp-content/uploads/6-medium_large.jpg" alt="Eaux turquoise à Milos" loading="lazy" decoding="async"></span>' ), $html );
 check( 'stretched link to the article', str_contains( $html, '<span class="mv-tile__title"><a class="mv-tile__link" href="https://example.test/?p=101">Article 101</a></span>' ), $html );
-check( 'alt text in the page language, as the description', str_contains( $html, '<span class="mv-tile__description">Eaux turquoise à Milos</span>' ) );
+check( 'alt text in the page language, on the img', str_contains( $html, 'alt="Eaux turquoise à Milos"' ) );
+check( 'description is the article excerpt', str_contains( $html, '<a class="mv-tile__link" href="https://example.test/?p=101">Article 101</a></span><span class="mv-tile__description">Une semaine à Milos, entre criques et villages.</span>' ), $html );
+preg_match( '#href="https://example.test/\?p=100">Article 100</a></span><span class="mv-tile__description">(.*?)</span>#', $html, $long );
+same( 'long excerpt cut on a word, under 130 characters', str_repeat( 'Un mot ', 17 ) . 'dernier…', $long[1] ?? null );
+check( 'no excerpt: no description', str_contains( $html, 'href="https://example.test/?p=103">Article 103</a></span></span></div>' ), $html );
 check( 'back to the index', str_contains( $html, '<a class="mv-badge mv-badge--warm" href="https://example.test/images/">Toutes les thématiques' ) );
 check( 'related: same group, with images, as badges', str_contains( $html, '<span class="mavo-image-results__label">Voir aussi</span> <a class="mv-badge mv-badge--neutral" href="https://example.test/images/coucher-de-soleil/">Coucher de soleil</a></p>' ), $html );
 check( 'no pagination for one page', ! str_contains( $html, 'mavo-image-results__pages' ) );
@@ -218,7 +226,7 @@ check( 'previous link', str_contains( $html, 'href="https://example.test/images/
 visit( 51, 'turquoise-water', 0, 'en' );
 $html = MII_Results::shortcode( [] );
 check( 'English page shows English usages only', str_contains( $html, '1 photo' ) && str_contains( $html, 'Article 110' ), $html );
-check( 'English alt', str_contains( $html, '<span class="mv-tile__description">Turquoise water 1</span>' ) );
+check( 'English alt', str_contains( $html, 'alt="Turquoise water 1"' ) );
 
 visit( 50 );
 $html = MII_Results::shortcode( [] );
@@ -361,6 +369,20 @@ $GLOBALS['MOCK_SCRIPTS']    = [];
 visit( 50 );
 check( 'without the theme script the rows still render', str_contains( MII_Results::shortcode( [] ), 'mv-shelf__track' ) && ! $GLOBALS['MOCK_SCRIPTS'] );
 update_option( MII_Results::ROWS_OPTION, [] );
+
+/* ------------------------------------------------------- tile excerpts */
+
+$excerpt = new ReflectionMethod( 'MII_Results', 'excerpt' );
+mii_post( 600, '', [ 'type' => 'page', 'lang' => 'fr' ] );
+mii_meta( 600, '_yoast_wpseo_metadesc', 'Notre guide de la Crète en famille.' );
+$GLOBALS['MOCK_EXCERPTS'][600] = '[mv-box] débris de shortcode';
+same( 'a page shows its meta description first', 'Notre guide de la Crète en famille.', $excerpt->invoke( null, 600 ) );
+mii_meta( 600, '_yoast_wpseo_metadesc', '%%excerpt%% %%sep%% %%sitename%%' );
+same( 'a Yoast template is not text', '[mv-box] débris de shortcode', $excerpt->invoke( null, 600 ) );
+mii_post( 601, '', [ 'lang' => 'fr' ] );
+mii_meta( 601, '_yoast_wpseo_metadesc', 'Description SEO.' );
+same( 'a post without an excerpt falls back to the meta description', 'Description SEO.', $excerpt->invoke( null, 601 ) );
+same( 'unknown post', '', $excerpt->invoke( null, 999999 ) );
 
 same( 'concept counts', [ 'beach' => 2, 'garden' => 1, 'sea' => 1, 'sunset' => 1, 'turquoise_water' => 10 ], ( static function ( $c ) { ksort( $c ); return $c; } )( mavo_image_concept_counts( 'fr' ) ) );
 

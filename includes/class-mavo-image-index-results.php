@@ -825,8 +825,10 @@ class MII_Results {
 	 * card-post.php and of mavo-for-you's cards: the whole tile is one link
 	 * (the stretched .mv-tile__link), photo above, text below.
 	 *
-	 * The alt text is shown as the description, so the <img> itself takes
-	 * alt="" as in those tiles: a screen reader would otherwise hear it twice.
+	 * Below the title, the article's excerpt, as on every other post tile
+	 * (2026-10-04; it was the photo's alt text). The alt text goes back on the
+	 * <img>: here the photo is the subject, not decoration, and with the
+	 * excerpt shown nothing else says what it depicts.
 	 */
 	private static function render_tile( array $tile, string $lang ): string {
 		$image   = $tile['image'];
@@ -840,7 +842,7 @@ class MII_Results {
 		$place = self::eyebrow( $image, $post_id, $lang );
 
 		$html = '<div class="mv-tile mv-tile--media mavo-image-results__tile">'
-			. '<span class="mv-tile__media"><img class="mv-tile__img" src="' . esc_url( $src ) . '" alt="" loading="lazy" decoding="async"></span>'
+			. '<span class="mv-tile__media"><img class="mv-tile__img" src="' . esc_url( $src ) . '" alt="' . esc_attr( (string) $image['alt_text'] ) . '" loading="lazy" decoding="async"></span>'
 			. '<span class="mv-tile__body">';
 
 		if ( '' !== $place ) {
@@ -850,11 +852,53 @@ class MII_Results {
 		$html .= '<span class="mv-tile__title"><a class="mv-tile__link" href="' . esc_url( (string) get_permalink( $post_id ) ) . '">'
 			. esc_html( wp_strip_all_tags( (string) get_the_title( $post_id ) ) ) . '</a></span>';
 
-		if ( '' !== (string) $image['alt_text'] ) {
-			$html .= '<span class="mv-tile__description">' . esc_html( (string) $image['alt_text'] ) . '</span>';
+		$excerpt = self::excerpt( $post_id );
+
+		if ( '' !== $excerpt ) {
+			$html .= '<span class="mv-tile__description">' . esc_html( $excerpt ) . '</span>';
 		}
 
 		return $html . '</span></div>';
+	}
+
+	/**
+	 * The line under a tile's title, by mavo-for-you's rule for its cards
+	 * (MFY_Data::description(), private there, so restated): a post's excerpt;
+	 * for a page — whose "excerpt" is trimmed body, often shortcode debris —
+	 * its Yoast meta description first. Cut at 130 characters on a word, as
+	 * those cards are, so both kinds of tile read the same.
+	 */
+	private static function excerpt( int $post_id ): string {
+		$post = get_post( $post_id );
+
+		if ( ! $post ) {
+			return '';
+		}
+
+		$clean = static fn( string $t ): string => trim( (string) preg_replace( '/\s+/u', ' ', wp_strip_all_tags( html_entity_decode( $t, ENT_QUOTES, 'UTF-8' ) ) ) );
+		$meta  = static function () use ( $post, $clean ): string {
+			$value = (string) get_post_meta( $post->ID, '_yoast_wpseo_metadesc', true );
+
+			// Yoast stores templates ("%%excerpt%%"); only plain text is usable here.
+			return str_contains( $value, '%%' ) ? '' : $clean( $value );
+		};
+
+		if ( 'page' === $post->post_type ) {
+			$text = $meta() ?: $clean( (string) get_the_excerpt( $post ) );
+		} else {
+			$text = $clean( (string) get_the_excerpt( $post ) ) ?: $meta();
+		}
+
+		$text = (string) apply_filters( 'mavo_image_tile_excerpt', $text, $post_id );
+
+		if ( mb_strlen( $text ) <= 130 ) {
+			return $text;
+		}
+
+		$cut   = mb_substr( $text, 0, 130 );
+		$space = mb_strrpos( $cut, ' ' );
+
+		return ( $space > 40 ? mb_substr( $cut, 0, $space ) : $cut ) . '…';
 	}
 
 	private static function render_pagination( string $concept, string $lang, int $page, int $pages ): string {

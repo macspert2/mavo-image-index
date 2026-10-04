@@ -345,6 +345,15 @@ function wp_enqueue_script( ...$a ) { $GLOBALS['MOCK_SCRIPTS'][] = $a[0]; }
 function wp_enqueue_style( ...$a ) { $GLOBALS['MOCK_STYLES'][] = $a[0]; }
 function status_header( $code ) { $GLOBALS['MOCK_STATUS'] = $code; }
 function nocache_headers() {}
+function get_post( $id ) {
+	global $wpdb;
+	$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM wp_posts WHERE ID = %d', is_object( $id ) ? $id->ID : (int) $id ), ARRAY_A );
+	if ( ! $row ) { return null; }
+	$p = new WP_Post( (int) $row['ID'], $row['post_type'] );
+	foreach ( $row as $k => $v ) { $p->$k = $v; }
+	return $p;
+}
+function get_the_excerpt( $post ) { return $GLOBALS['MOCK_EXCERPTS'][ is_object( $post ) ? $post->ID : (int) $post ] ?? ''; }
 function wp_strip_all_tags( $s ) { return trim( strip_tags( (string) $s ) ); }
 function get_the_title( $id ) { return 'Article ' . ( is_object( $id ) ? $id->ID : (int) $id ); }
 function wp_get_attachment_image( $id, $size = 'thumbnail', $icon = false, $attr = [] ) {
@@ -353,6 +362,7 @@ function wp_get_attachment_image( $id, $size = 'thumbnail', $icon = false, $attr
 class WP_Query_Stub { public $is_404 = false; public function set_404() { $this->is_404 = true; } }
 $GLOBALS['wp_query'] = new WP_Query_Stub();
 
+#[AllowDynamicProperties]
 class WP_Post {
 	public $ID;
 	public $post_type;

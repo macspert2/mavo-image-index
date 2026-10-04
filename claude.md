@@ -145,8 +145,10 @@ an overlay or a separate consumer plugin.
 - Look: the theme's own components from `mv-tiles.css` (loaded on every page),
   in the markup of its `template-parts/mv-shared/card-post.php`: photos are
   `mv-tile mv-tile--media` in `mv-tile-grid mv-grid--3` (country, region as eyebrow,
-  article title as the stretched link, alt text as the description with
-  `alt=""` on the img), the index is `mv-tile--text mv-tile--compact` with
+  article title as the stretched link, the article's excerpt as the
+  description — since 2026-10-04, by mavo-for-you's card rule: excerpt, a
+  page's Yoast description first, 130 characters — and the photo's alt text
+  on the img), the index is `mv-tile--text mv-tile--compact` with
   `mv-tile__count`, related/back links are `mv-badge`. `assets/results.css`
   holds only spacing. If the theme renames these classes, this follows.
 - The bare page (no concept) is a browse page (user's decision,
