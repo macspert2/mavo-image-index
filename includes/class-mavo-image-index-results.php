@@ -870,7 +870,9 @@ class MII_Results {
 
 		$place = self::eyebrow( $image, $post_id, $lang );
 
-		$html = '<div class="mv-tile mv-tile--media mavo-image-results__tile">'
+		// data-post-id: which article the tile leads to, for click counting
+		// (mavo-search counts photo-row clicks on its search page).
+		$html = '<div class="mv-tile mv-tile--media mavo-image-results__tile" data-post-id="' . (int) $post_id . '">'
 			. '<span class="mv-tile__media"><img class="mv-tile__img" src="' . esc_url( $src ) . '" alt="' . esc_attr( (string) $image['alt_text'] ) . '" loading="lazy" decoding="async"></span>'
 			. '<span class="mv-tile__body">';
 

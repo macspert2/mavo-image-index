@@ -207,6 +207,8 @@ an overlay or a separate consumer plugin.
   mavo-img-srcset, never stored).
 - Visitor-facing text (shortcode) uses per-language arrays, the project
   convention; admin text uses `__()` like mavo-img-srcset's admin.
+- Photo tiles carry `data-post-id` (2026-10-04): mavo-search counts clicks
+  on its search page's photo row by it.
 - `mavo_image_concept_row( $concept, $lang, $args )` (2026-10-04) prints one
   browse row anywhere — the search page shows one when the query is exactly a
   concept. Same tiles, order and "see all" link as the browse page.

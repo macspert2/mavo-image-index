@@ -274,6 +274,7 @@ sort( $sorted );
 same( 'every article with a photo of its own, one tile each', [ '100', '101', '102', '103', '105' ], $sorted );
 same( 'featured-only articles last', '102', end( $links[1] ) );
 check( 'tiles in slides', 5 === substr_count( $track[0], '<li class="mv-shelf__slide"><div class="mv-tile mv-tile--media' ) );
+check( 'each tile names its article', 5 === preg_match_all( '/mavo-image-results__tile" data-post-id="\d+"/', $track[0] ) );
 check( 'row tile never the featured image when the article has another match', ! str_contains( $track[0], 'uploads/10-medium_large' ) && str_contains( $track[0], 'uploads/11-medium_large' ) );
 
 /* ---- one appearance per article across the whole browse page ---- */
