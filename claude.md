@@ -207,6 +207,8 @@ an overlay or a separate consumer plugin.
   mavo-img-srcset, never stored).
 - Visitor-facing text (shortcode) uses per-language arrays, the project
   convention; admin text uses `__()` like mavo-img-srcset's admin.
+- `mavo_image_match_concepts( $text, $lang )` (2026-10-04) runs the matcher on any
+  text, for mavo-search's query parsing, so that plugin never names `MII_Matcher`.
 - `mavo_image_concepts( $lang )`, `mavo_image_concept_counts( $lang )` and
   `mavo_image_results_url( $concept, $lang )` were added for consumers.
 - Search defaults `same_language => true`, which also excludes images used

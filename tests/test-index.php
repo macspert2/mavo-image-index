@@ -126,4 +126,8 @@ same( 'full rebuild total', 6, $step['total'] );
 same( 'deleted attachment cleaned at the end', 0, (int) $wpdb->get_var( 'SELECT COUNT(*) FROM wp_mavo_image_items WHERE attachment_id = 108' ) );
 check( 'last rebuild recorded', isset( get_option( MII_Rebuild::LAST_OPTION )['images'] ) );
 
+$matched = mavo_image_match_concepts( 'Plage aux eaux turquoise', 'fr' );
+same( 'match_concepts on free text', [ 'beach', 'turquoise_water' ], ( static function ( $m ) { $c = array_column( $m, 'concept' ); sort( $c ); return $c; } )( $matched ) );
+same( 'match_concepts shape', [ 'concept', 'confidence', 'matched' ], array_keys( $matched[0] ?? [] ) );
+
 done();

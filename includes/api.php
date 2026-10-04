@@ -219,6 +219,29 @@ function mavo_image_concepts( ?string $lang = null ): array {
 }
 
 /**
+ * The concepts a free text speaks of, read with the same dictionary and rules
+ * as alt text — for a consumer holding words rather than an image, such as
+ * mavo-search turning the query "eaux turquoise" into turquoise_water.
+ *
+ * Accents are not folded here either: "foret" is not "forêt".
+ *
+ * @return array<int,array{concept:string,confidence:float,matched:string}> Strongest first.
+ */
+function mavo_image_match_concepts( string $text, ?string $lang = null ): array {
+	$out = [];
+
+	foreach ( MII_Matcher::match( $text, MII_Lang::resolve( $lang ) ) as $match ) {
+		$out[] = [
+			'concept'    => (string) $match['concept'],
+			'confidence' => (float) $match['confidence'],
+			'matched'    => (string) $match['matched'],
+		];
+	}
+
+	return $out;
+}
+
+/**
  * How many images carry each concept, among images used in posts of $lang.
  *
  * @return array<string,int> slug => images; concepts with none are absent

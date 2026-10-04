@@ -43,6 +43,7 @@ mavo_image_search( [ 'hub' => $hub_id, 'include_hub_descendants' => true ] );
 | `mavo_image_best_match( $args )` | One image object or `null` |
 | `mavo_image_concepts( $lang )` | The dictionary: slug ⇒ label, group |
 | `mavo_image_concept_counts( $lang )` | slug ⇒ images used in posts of `$lang` |
+| `mavo_image_match_concepts( $text, $lang )` | The concepts a free text names (`concept`, `confidence`, `matched`), same rules as alt text — used by mavo-search on queries |
 | `mavo_image_results_url( $concept, $lang )` | The results-page URL for a concept, or `''` |
 | `mavo_register_image_concept( $slug, $def )` | Add or extend a concept (on `mavo_image_register_concepts`) |
 
