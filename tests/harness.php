@@ -475,6 +475,11 @@ function concepts_of( string $text, string $lang ): array {
 	return $out;
 }
 
+/** The visible link text of a [mavo_image_more] line. */
+function link_text( string $html ): string {
+	return preg_match( '#class="mavo-related-link__anchor"[^>]*>(.*?)</a>#us', $html, $m ) ? html_entity_decode( $m[1], ENT_QUOTES, 'UTF-8' ) : '';
+}
+
 function done(): void {
 	printf( "  %d passed, %d failed\n", $GLOBALS['MII_PASSES'], $GLOBALS['MII_FAILS'] );
 	exit( $GLOBALS['MII_FAILS'] ? 1 : 0 );

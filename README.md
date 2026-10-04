@@ -75,7 +75,7 @@ Filters: `mavo_image_concept_definitions`, `mavo_image_concept_label`,
 `mavo_image_search_results`, `mavo_image_geo_context`, `mavo_image_post_geo`,
 `mavo_image_usage_extract`, `mavo_image_usage_post_types`, `mavo_image_languages`,
 `mavo_image_square_tolerance`, `mavo_image_more_url`, `mavo_image_more_text`,
-`mavo_image_more_strict`, `mavo_image_results_slug`, `mavo_image_results_rows`, `mavo_image_results_row_min`, `mavo_image_results_featured_fallback`, `mavo_image_results_popularity`, `mavo_image_tile_eyebrow`, `mavo_image_tile_excerpt`.
+`mavo_image_more_strict`, `mavo_image_results_slug`, `mavo_image_results_rows`, `mavo_image_results_row_min`, `mavo_image_results_featured_fallback`, `mavo_image_results_popularity`, `mavo_image_tile_eyebrow`, `mavo_image_tile_excerpt`, `mavo_image_more_label`.
 
 ## Shortcode and results page
 
@@ -83,7 +83,11 @@ Filters: `mavo_image_concept_definitions`, `mavo_image_concept_label`,
 [mavo_image_more concept="turquoise_water" text="Voir d’autres plages aux eaux turquoise"]
 ```
 
-A plain same-tab link, classes `mavo-image-more mavo-image-more--turquoise-water`.
+Rendered exactly like `[mavo_link]` from mavo-custom-shortcodes — same markup
+and classes (`mavo-related-link`, `__label`, `__anchor`), so that plugin's
+stylesheet draws it: “En images : <link>” (“In pictures:”, “In Bildern:”;
+`label=""` or the `mavo_image_more_label` filter to change it). Extra classes
+`mavo-image-more mavo-image-more--turquoise-water`. A plain same-tab link.
 It leads to the **results page**: choose a page in Tools → Image Index → Results
 page (the French one; its Polylang translations serve en/de). Each concept then
 has its own URL below it — `/images/eaux-turquoise/`,

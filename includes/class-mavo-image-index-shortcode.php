@@ -39,6 +39,13 @@ class MII_Shortcode {
 		'de' => 'Ähnliche Bilder entdecken',
 	];
 
+	/** The lead-in before the link, like [mavo_link]'s "À lire :". */
+	const DEFAULT_LABEL = [
+		'fr' => 'En images :',
+		'en' => 'In pictures:',
+		'de' => 'In Bildern:',
+	];
+
 	public static function init(): void {
 		add_shortcode( self::TAG, [ __CLASS__, 'render' ] );
 	}
@@ -52,6 +59,7 @@ class MII_Shortcode {
 			'image_id' => 0,
 			'class'    => '',
 			'url'      => '',
+			'label'    => '',
 		], (array) $atts, self::TAG );
 
 		$concept = MII_Concepts::sanitize_slug( (string) $atts['concept'] );
@@ -90,17 +98,27 @@ class MII_Shortcode {
 			$text = self::default_text( $concept, $lang );
 		}
 
+		$label = trim( (string) $atts['label'] );
+
+		if ( '' === $label ) {
+			/** The lead-in before the link, e.g. "En images :". */
+			$label = (string) apply_filters( 'mavo_image_more_label', self::DEFAULT_LABEL[ $lang ] ?? self::DEFAULT_LABEL[ MII_Lang::FALLBACK ], $concept, $lang );
+		}
+
 		$classes = array_merge(
-			[ 'mavo-image-more', 'mavo-image-more--' . str_replace( '_', '-', $concept ) ],
+			[ 'mavo-related-link', 'mavo-image-more', 'mavo-image-more--' . str_replace( '_', '-', $concept ) ],
 			array_map( 'sanitize_html_class', preg_split( '/\s+/', (string) $atts['class'], -1, PREG_SPLIT_NO_EMPTY ) )
 		);
 
-		return sprintf(
-			'<a class="%s" href="%s">%s</a>',
-			esc_attr( implode( ' ', array_filter( $classes ) ) ),
-			esc_url( $url ),
-			esc_html( $text )
-		);
+		// [mavo_link]'s markup and classes exactly (mavo-custom-shortcodes), so
+		// its stylesheet — loaded on every singular page — draws this line too:
+		// the bordered block, the brown label, the bold blue link. A <div> for
+		// the same reason it uses one: wpautop must not nest it in a <p>.
+		// Without that plugin this degrades to an unstyled line with a link.
+		return '<div class="' . esc_attr( implode( ' ', array_filter( $classes ) ) ) . '">'
+			. ( '' !== $label ? '<span class="mavo-related-link__label">' . esc_html( $label ) . '</span> ' : '' )
+			. '<a class="mavo-related-link__anchor" href="' . esc_url( $url ) . '">' . esc_html( $text ) . '</a>'
+			. '</div>';
 	}
 
 	/** '' when nothing resolves. */

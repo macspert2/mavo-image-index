@@ -22,18 +22,18 @@ same( 'unsafe url', '', sc( [ 'concept' => 'beach', 'url' => 'javascript:alert(1
 /* ------------------------------------------------------------ explicit url */
 
 same( 'explicit url, default text in current language',
-	'<a class="mavo-image-more mavo-image-more--turquoise-water" href="https://example.test/x/">Voir d’autres images similaires</a>',
+	'<div class="mavo-related-link mavo-image-more mavo-image-more--turquoise-water"><span class="mavo-related-link__label">En images :</span> <a class="mavo-related-link__anchor" href="https://example.test/x/">Voir d’autres images similaires</a></div>',
 	sc( [ 'concept' => 'turquoise_water', 'url' => 'https://example.test/x/' ] ) );
 
 same( 'custom text, escaped',
-	'<a class="mavo-image-more mavo-image-more--beach extra bad" href="https://example.test/x/">Plages &lt;b&gt; &amp; criques</a>',
+	'<div class="mavo-related-link mavo-image-more mavo-image-more--beach extra bad"><span class="mavo-related-link__label">En images :</span> <a class="mavo-related-link__anchor" href="https://example.test/x/">Plages &lt;b&gt; &amp; criques</a></div>',
 	sc( [ 'concept' => 'beach', 'url' => 'https://example.test/x/', 'text' => 'Plages <b> & criques', 'class' => 'extra "bad' ] ) );
 
-same( 'German default text', 'Ähnliche Bilder entdecken', strip_tags( sc( [ 'concept' => 'beach', 'url' => 'https://example.test/x/', 'lang' => 'de' ] ) ) );
-same( 'unsupported language falls back to current', 'Voir d’autres images similaires', strip_tags( sc( [ 'concept' => 'beach', 'url' => 'https://example.test/x/', 'lang' => 'it' ] ) ) );
+same( 'German default text', 'Ähnliche Bilder entdecken', link_text( sc( [ 'concept' => 'beach', 'url' => 'https://example.test/x/', 'lang' => 'de' ] ) ) );
+same( 'unsupported language falls back to current', 'Voir d’autres images similaires', link_text( sc( [ 'concept' => 'beach', 'url' => 'https://example.test/x/', 'lang' => 'it' ] ) ) );
 
 $GLOBALS['MOCK_LANG'] = 'en';
-same( 'current language is Polylang’s', 'See more like this', strip_tags( sc( [ 'concept' => 'beach', 'url' => 'https://example.test/x/' ] ) ) );
+same( 'current language is Polylang’s', 'See more like this', link_text( sc( [ 'concept' => 'beach', 'url' => 'https://example.test/x/' ] ) ) );
 $GLOBALS['MOCK_LANG'] = 'fr';
 
 /* -------------------------------------------------------- mapped targets */
@@ -88,7 +88,13 @@ add_action( 'mavo_image_register_concepts', static function () {
 	mavo_register_image_concept( 'turquoise_water', [ 'more_text' => [ 'fr' => 'Voir d’autres plages aux eaux turquoise' ] ] );
 } );
 MII_Concepts::reset();
-same( 'concept-specific default text', 'Voir d’autres plages aux eaux turquoise', strip_tags( sc( [ 'concept' => 'turquoise_water', 'url' => 'https://example.test/x/' ] ) ) );
+same( 'concept-specific default text', 'Voir d’autres plages aux eaux turquoise', link_text( sc( [ 'concept' => 'turquoise_water', 'url' => 'https://example.test/x/' ] ) ) );
+
+same( 'German label', 'In Bildern:', preg_match( '#__label">(.*?)</span>#', sc( [ 'concept' => 'beach', 'url' => 'https://example.test/x/', 'lang' => 'de' ] ), $m ) ? $m[1] : null );
+same( 'label attribute overrides', '<span class="mavo-related-link__label">Galerie :</span>', preg_match( '#<span class="mavo-related-link__label">.*?</span>#', sc( [ 'concept' => 'beach', 'url' => 'https://example.test/x/', 'label' => 'Galerie :' ] ), $m ) ? $m[0] : null );
+add_filter( 'mavo_image_more_label', static fn() => '' );
+check( 'label filter can drop the label', ! str_contains( sc( [ 'concept' => 'beach', 'url' => 'https://example.test/x/' ] ), 'mavo-related-link__label' ) );
+remove_all_filters( 'mavo_image_more_label' );
 
 check( 'no nofollow, no target=_blank, no script', ! preg_match( '/nofollow|_blank|<script/', sc( [ 'concept' => 'beach', 'url' => 'https://example.test/x/' ] ) ) );
 

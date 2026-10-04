@@ -198,6 +198,16 @@ an overlay or a separate consumer plugin.
 - `[mavo_image_more]` falls back to this page after any explicit or mapped
   target, so choosing the page is normally the only setting needed.
 
+### 8b. `[mavo_image_more]` looks like `[mavo_link]` (2026-10-04)
+
+It emits mavo-custom-shortcodes' `[mavo_link]` markup verbatim — a `<div
+class="mavo-related-link">` with a `__label` span and a `__anchor` link — plus
+its own `mavo-image-more*` classes, and ships no CSS of its own: that
+plugin's stylesheet is loaded on every singular page, where the shortcode
+lives. Label per language (`En images :` / `In pictures:` / `In Bildern:`),
+`label` attribute and `mavo_image_more_label` filter. If mavo-custom-shortcodes
+renames those classes, this follows; without it the line is unstyled.
+
 ### 9. Smaller things
 
 - `hero` is a valid role with no detector; whatever renders heroes can add rows

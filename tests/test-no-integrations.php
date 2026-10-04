@@ -32,7 +32,7 @@ same( 'place filter without geotag-plus: plain tag join', [], mavo_image_search(
 same( 'hubs requested without mavo-hubs: omitted', false, isset( mavo_image_search( [ 'concepts' => [ 'beach' ], 'hubs' => true ] )[0]['usages'][0]['hubs'] ) );
 
 MII_Shortcode::init();
-same( 'shortcode without Polylang', 'Voir d’autres images similaires', strip_tags( MII_Shortcode::render( [ 'concept' => 'beach', 'url' => 'https://example.test/x/' ] ) ) );
+same( 'shortcode without Polylang', 'Voir d’autres images similaires', link_text( MII_Shortcode::render( [ 'concept' => 'beach', 'url' => 'https://example.test/x/' ] ) ) );
 
 update_option( MII_Shortcode::TARGETS_OPTION, [ 'beach' => '10' ] );
 same( 'page target without Polylang uses the page itself', 'https://example.test/?p=10', MII_Shortcode::target_url( 'beach', 'fr' ) );

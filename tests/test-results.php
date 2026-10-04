@@ -102,7 +102,7 @@ check( 'other pages do not', ! get_option( MII_Results::FLUSH_OPTION ) );
 /* --------------------------------------------------- [mavo_image_more] */
 
 same( 'the shortcode now links to the results page',
-	'<a class="mavo-image-more mavo-image-more--turquoise-water" href="https://example.test/images/eaux-turquoise/">Voir d’autres plages aux eaux turquoise</a>',
+	'<div class="mavo-related-link mavo-image-more mavo-image-more--turquoise-water"><span class="mavo-related-link__label">En images :</span> <a class="mavo-related-link__anchor" href="https://example.test/images/eaux-turquoise/">Voir d’autres plages aux eaux turquoise</a></div>',
 	MII_Shortcode::render( [ 'concept' => 'turquoise_water', 'text' => 'Voir d’autres plages aux eaux turquoise' ] ) );
 same( 'and in English to the English page', 'https://example.test/en/pictures/turquoise-water/', MII_Shortcode::target_url( 'turquoise_water', 'en' ) );
 same( 'and nothing where no translation exists', '', MII_Shortcode::render( [ 'concept' => 'turquoise_water', 'lang' => 'de' ] ) );
