@@ -149,6 +149,11 @@ class MII_Results {
 			return $base;
 		}
 
+		// Private concepts have no page, so nothing can link to one.
+		if ( ! MII_Concepts::is_public( $concept ) ) {
+			return '';
+		}
+
 		$slug       = self::slug( $concept, $lang );
 		$place_slug = '';
 
@@ -361,6 +366,8 @@ class MII_Results {
 		// phpcs:enable
 
 		$concept = '' === $slug ? null : self::concept_from_slug( $slug, $lang );
+		$private = null !== $concept && ! MII_Concepts::is_public( $concept );
+		$concept = $private ? null : $concept;
 		$place   = 0;
 
 		if ( '' !== $place_slug ) {
@@ -374,6 +381,7 @@ class MII_Results {
 			'concept' => $concept,
 			'place'   => $place,
 			'page'    => max( 1, $num ),
+			// A private concept's URL is a plain 404, indistinguishable from a typo.
 			'unknown' => ( '' !== $slug && null === $concept ) || ( '' !== $place_slug && ! $place ),
 		];
 	}
@@ -489,7 +497,7 @@ class MII_Results {
 		$page    = $current['page'] ?? 1;
 
 		// A page dedicated to one concept: [mavo_image_results concept="garden"].
-		if ( ! $concept && '' !== $atts['concept'] && MII_Concepts::exists( MII_Concepts::sanitize_slug( (string) $atts['concept'] ) ) ) {
+		if ( ! $concept && '' !== $atts['concept'] && MII_Concepts::is_public( MII_Concepts::sanitize_slug( (string) $atts['concept'] ) ) ) {
 			$concept = MII_Concepts::sanitize_slug( (string) $atts['concept'] );
 		}
 
@@ -616,7 +624,7 @@ class MII_Results {
 
 	/** @return string[] The curated row concepts, in order. */
 	public static function row_concepts(): array {
-		$rows = array_filter( (array) get_option( self::ROWS_OPTION, [] ), [ 'MII_Concepts', 'exists' ] );
+		$rows = array_filter( (array) get_option( self::ROWS_OPTION, [] ), [ 'MII_Concepts', 'is_public' ] );
 
 		/** The concepts given a row on the results page, in order. */
 		return array_values( array_unique( (array) apply_filters( 'mavo_image_results_rows', $rows ) ) );
@@ -629,7 +637,7 @@ class MII_Results {
 		foreach ( preg_split( '/[\s,]+/', $text, -1, PREG_SPLIT_NO_EMPTY ) as $slug ) {
 			$slug = MII_Concepts::sanitize_slug( $slug );
 
-			if ( MII_Concepts::exists( $slug ) && ! in_array( $slug, $out, true ) ) {
+			if ( MII_Concepts::is_public( $slug ) && ! in_array( $slug, $out, true ) ) {
 				$out[] = $slug;
 			}
 		}
@@ -848,7 +856,7 @@ class MII_Results {
 
 		// Dictionary order, which groups landscape, places, activities….
 		foreach ( MII_Concepts::all() as $slug => $def ) {
-			if ( empty( $counts[ $slug ] ) ) {
+			if ( empty( $counts[ $slug ] ) || ! MII_Concepts::is_public( $slug ) ) {
 				continue;
 			}
 
@@ -1076,7 +1084,7 @@ class MII_Results {
 		$links  = [];
 
 		foreach ( MII_Concepts::all() as $slug => $def ) {
-			if ( $slug !== $concept && $def['group'] === $group && ! empty( $counts[ $slug ] ) ) {
+			if ( $slug !== $concept && $def['group'] === $group && ! empty( $counts[ $slug ] ) && MII_Concepts::is_public( $slug ) ) {
 				$links[] = '<a class="mv-badge mv-badge--neutral" href="' . esc_url( self::url( $slug, $lang ) ) . '">' . esc_html( MII_Concepts::label( $slug, $lang ) ) . '</a>';
 			}
 		}

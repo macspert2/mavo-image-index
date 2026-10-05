@@ -366,7 +366,7 @@ class MII_Admin {
 		$counts = MII_Search::concept_counts( MII_Lang::default_language() );
 		$known  = [];
 
-		foreach ( MII_Concepts::slugs() as $slug ) {
+		foreach ( array_filter( MII_Concepts::slugs(), [ 'MII_Concepts', 'is_public' ] ) as $slug ) {
 			$known[] = $slug . ' (' . (int) ( $counts[ $slug ] ?? 0 ) . ')';
 		}
 		?>

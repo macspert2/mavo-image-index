@@ -88,6 +88,18 @@ class MII_Concepts {
 		return isset( self::all()[ $slug ] );
 	}
 
+	/**
+	 * May this concept appear on a public page — a topic page, a pill, a
+	 * browse row, a place gallery, a link? Private concepts (family,
+	 * children) stay indexed and searchable from code, nowhere else.
+	 */
+	public static function is_public( string $slug ): bool {
+		$def = self::get( $slug );
+
+		/** Whether a concept may be shown to visitors. */
+		return (bool) apply_filters( 'mavo_image_concept_is_public', $def && empty( $def['private'] ), $slug );
+	}
+
 	public static function get( string $slug ): ?array {
 		return self::all()[ $slug ] ?? null;
 	}
@@ -158,6 +170,7 @@ class MII_Concepts {
 			'except'    => [],
 			'implies'   => [],
 			'more_text' => [],
+			'private'   => ! empty( $def['private'] ),
 		];
 
 		foreach ( [ 'labels', 'more_text' ] as $key ) {

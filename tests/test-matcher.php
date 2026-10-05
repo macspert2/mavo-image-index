@@ -15,16 +15,13 @@ same( 'agent.md matcher example',
 
 /* -------------------------------------------------------------- phrase mapping */
 
+// family_from_behind was removed (2026-10-05): "de dos" alone says nothing.
 foreach ( [ 'fr' => 'famille de dos', 'en' => 'family seen from behind', 'de' => 'Familie von hinten' ] as $lang => $text ) {
-	$found = concepts_of( $text, $lang );
-	check( "$lang family_from_behind: $text", in_array( 'family_from_behind', $found, true ), $found );
-	check( "$lang also family: $text", in_array( 'family', $found, true ), $found );
+	same( "$lang: just family — $text", [ 'family' ], concepts_of( $text, $lang ) );
 }
-
-$m = MII_Matcher::match( 'Enfants de dos sur le sentier', 'fr' );
-$by = array_column( $m, null, 'concept' );
-same( 'implied family is weaker', 0.9, $by['family']['confidence'] ?? null );
-same( 'implied family names its source', 'family_from_behind', $by['family']['implied_by'] ?? null );
+same( 'a child from behind is not a family', [ 'children' ], concepts_of( 'Enfant de dos sur le sentier', 'fr' ) );
+same( '"de dos" alone is nothing', [], concepts_of( 'Vue de dos', 'fr' ) );
+check( 'family_from_behind no longer exists', ! MII_Concepts::exists( 'family_from_behind' ) );
 
 /* ---------------------------------------------------------------- boundaries */
 

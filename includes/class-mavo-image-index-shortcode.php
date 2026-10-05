@@ -64,7 +64,8 @@ class MII_Shortcode {
 
 		$concept = MII_Concepts::sanitize_slug( (string) $atts['concept'] );
 
-		if ( '' === $concept || ! MII_Concepts::exists( $concept ) ) {
+		// Unknown, or private (family, children): no link, whatever the target.
+		if ( '' === $concept || ! MII_Concepts::is_public( $concept ) ) {
 			return '';
 		}
 

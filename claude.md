@@ -241,6 +241,23 @@ each linking to `/images/{topic}/{place}/`.
   falling back to the topic page. Links out: the topic everywhere, the place's
   tag archive.
 
+### 8d. Private concepts: family and children (user's decision, 2026-10-05)
+
+The blog is personal and public, but its photos of the children should not be
+listable in one place. `'private' => true` in `data/concepts.php` makes a
+concept indexed and searchable from PHP (`mavo_image_search()`, exclusion
+filters) and absent from every public surface: no topic or topic × place
+page (a plain 404, like a typo), no URL from `MII_Results::url()`, no "Voir
+aussi" pill, no entry in the concept list or browse rows (stored rows are
+filtered too), never a place-gallery topic, no `[mavo_image_more]` link even
+with an explicit `url`. One check: `MII_Concepts::is_public()` (filter
+`mavo_image_concept_is_public`). Any new public surface must use it.
+
+`family_from_behind` (agent.md's example) was removed outright: the alt-text
+rules write "family from behind" for photos that often show a single child,
+so the concept was mostly untrue. "Famille de dos" now yields family;
+"Enfant de dos" children; "de dos" alone nothing.
+
 ### 9. Smaller things
 
 - `hero` is a valid role with no detector; whatever renders heroes can add rows

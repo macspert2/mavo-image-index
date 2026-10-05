@@ -15,6 +15,7 @@
  * photos (the lift); topics need MIN_LIFT and MIN_PHOTOS, rank by
  * log(lift) × √photos, and no more than MAX_PER_GROUP come from one group
  * (landscape, places, visual…), so the four say different things.
+ * Private concepts (family, children) never qualify.
  *
  * Which photos count: those used in articles whose OWN place — the most
  * specific one, stored per usage row — lies inside this place. Not every
@@ -40,9 +41,6 @@ class MII_Place {
 	const MIN_LIFT      = 1.3;
 	const MAX_SHARE     = 0.25;
 	const MAX_PER_GROUP = 2;
-
-	/** People, not places: true of every destination on a family blog. */
-	const EXCLUDED = [ 'family', 'children', 'family_from_behind' ];
 
 	const TEXT = [
 		'heading' => [ 'fr' => '%s en images', 'en' => '%s in pictures', 'de' => '%s in Bildern' ],
@@ -238,7 +236,8 @@ class MII_Place {
 			$concept = (string) $row['concept'];
 			$n       = (int) $row['n'];
 
-			if ( $n < self::MIN_PHOTOS || in_array( $concept, self::EXCLUDED, true ) || ! MII_Concepts::exists( $concept ) || empty( $site[ $concept ] ) ) {
+			// Private concepts (family, children) are never a topic.
+			if ( $n < self::MIN_PHOTOS || ! MII_Concepts::is_public( $concept ) || empty( $site[ $concept ] ) ) {
 				continue;
 			}
 

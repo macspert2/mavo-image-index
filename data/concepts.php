@@ -19,6 +19,7 @@
  *
  * 'except' phrases veto any match they overlap: "le tour du lac" is a walk,
  * not a tower. 'implies' adds another concept at 0.9 × this one's confidence.
+ * 'private' => true keeps a concept off every public page (see family).
  *
  * Built from domain knowledge first; to be tuned against the exported corpus.
  */
@@ -405,10 +406,17 @@ return [
 		],
 	],
 
-	/* ------------------------------------------------------------------ family */
+	/* ------------------------------------------------------------------ family
+	 * Private (user's decision, 2026-10-05): indexed and queryable by code,
+	 * but never on a public surface — no topic page, pill, row, gallery or
+	 * link — so the blog's photos of its children cannot be listed in one
+	 * place. "family_from_behind" was removed outright: the alt-text rules
+	 * write "family from behind" for photos that often show one child.
+	 */
 
 	'family' => [
 		'group'    => 'family',
+		'private'  => true,
 		'labels'   => [ 'fr' => 'En famille', 'en' => 'Family', 'de' => 'Familie' ],
 		'synonyms' => [
 			'fr' => [ 'famille(s)', 'parents' ],
@@ -419,6 +427,7 @@ return [
 
 	'children' => [
 		'group'    => 'family',
+		'private'  => true,
 		'labels'   => [ 'fr' => 'Enfants', 'en' => 'Children', 'de' => 'Kinder' ],
 		'synonyms' => [
 			'fr' => [ 'enfant(s)', 'fils', 'fille(s)', 'garçon(s)', 'bébé(s)' ],
@@ -428,17 +437,6 @@ return [
 		'except' => [
 			'de' => [ 'kindergarten', 'kindergärten' ],
 		],
-	],
-
-	'family_from_behind' => [
-		'group'    => 'family',
-		'labels'   => [ 'fr' => 'Famille de dos', 'en' => 'Family from behind', 'de' => 'Familie von hinten' ],
-		'synonyms' => [
-			'fr' => [ 'de dos', 'vu(e)(s) de dos' ],
-			'en' => [ 'from behind', 'seen from behind', 'from the back' ],
-			'de' => [ 'von hinten', 'rückenansicht', 'von hinten gesehen' ],
-		],
-		'implies' => [ 'family' ],
 	],
 
 	/* -------------------------------------------------------- routes / terrain */
