@@ -149,7 +149,12 @@ an overlay or a separate consumer plugin.
   article title as the stretched link, the article's excerpt as the
   description — since 2026-10-04, by mavo-for-you's card rule: excerpt, a
   page's Yoast description first, 130 characters — and the photo's alt text
-  on the img), the index is `mv-tile--text mv-tile--compact` with
+  on the img). **Never `get_the_excerpt()`**: for an article with no written
+  excerpt it runs `the_content`, which re-entered `append_to_page()` and
+  appended the grid again, recursively — `/images/fleurs/` exhausted 256 MB
+  (2026-10-05). The written excerpt, else the opening 40 words with shortcodes
+  and markup stripped; `append_to_page()` also refuses to re-enter while
+  results render., the index is `mv-tile--text mv-tile--compact` with
   `mv-tile__count`, related/back links are `mv-badge`. `assets/results.css`
   holds only spacing. If the theme renames these classes, this follows.
 - The bare page (no concept) is a browse page (user's decision,

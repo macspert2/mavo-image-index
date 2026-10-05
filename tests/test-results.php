@@ -160,10 +160,9 @@ same( 'bare page keeps its title', [ 'title' => 'Images' ], MII_Results::title_p
 
 /* -------------------------------------------------------------- rendering */
 
-$GLOBALS['MOCK_EXCERPTS'] = [
-	101 => '<p>Une semaine à Milos,   entre criques et villages.</p>',
-	100 => str_repeat( 'Un mot ', 17 ) . 'dernier mot qui dépasse largement la limite des cent trente caractères',
-];
+global $wpdb;
+$wpdb->update( 'wp_posts', [ 'post_excerpt' => '<p>Une semaine à Milos,   entre criques et villages.</p>' ], [ 'ID' => 101 ] );
+$wpdb->update( 'wp_posts', [ 'post_excerpt' => str_repeat( 'Un mot ', 17 ) . 'dernier mot qui dépasse largement la limite des cent trente caractères' ], [ 'ID' => 100 ] );
 visit( 50, 'eaux-turquoise' );
 // Place eyebrow: the image's place in the article it links to.
 // Eyebrow: country and region of the article's place, never the city.
@@ -407,14 +406,42 @@ update_option( MII_Results::ROWS_OPTION, [] );
 $excerpt = new ReflectionMethod( 'MII_Results', 'excerpt' );
 mii_post( 600, '', [ 'type' => 'page', 'lang' => 'fr' ] );
 mii_meta( 600, '_yoast_wpseo_metadesc', 'Notre guide de la Crète en famille.' );
-$GLOBALS['MOCK_EXCERPTS'][600] = '[mv-box] débris de shortcode';
+$wpdb->update( 'wp_posts', [ 'post_content' => '[mv-box title="x"]<p>Texte de la <b>page</b>.</p>' ], [ 'ID' => 600 ] );
 same( 'a page shows its meta description first', 'Notre guide de la Crète en famille.', $excerpt->invoke( null, 600 ) );
 mii_meta( 600, '_yoast_wpseo_metadesc', '%%excerpt%% %%sep%% %%sitename%%' );
-same( 'a Yoast template is not text', '[mv-box] débris de shortcode', $excerpt->invoke( null, 600 ) );
+same( 'a Yoast template is not text; the opening words instead, without shortcodes or markup', 'Texte de la page.', $excerpt->invoke( null, 600 ) );
 mii_post( 601, '', [ 'lang' => 'fr' ] );
 mii_meta( 601, '_yoast_wpseo_metadesc', 'Description SEO.' );
 same( 'a post without an excerpt falls back to the meta description', 'Description SEO.', $excerpt->invoke( null, 601 ) );
 same( 'unknown post', '', $excerpt->invoke( null, 999999 ) );
+$wpdb->update( 'wp_posts', [ 'post_content' => '<p>' . str_repeat( 'mot ', 60 ) . '</p>' ], [ 'ID' => 601 ] );
+same( 'no written excerpt: the opening 40 words, then cut at 130 characters', rtrim( mb_substr( str_repeat( 'mot ', 40 ), 0, 128 ) ) . '…', $excerpt->invoke( null, 601 ) );
+
+/* --------------------------------------- regression: /images/fleurs/ 2026-10-05
+ * A tile whose article had no written excerpt ran get_the_excerpt(), which ran
+ * the_content, which appended the whole grid again — until PHP ran out of
+ * memory. Reproduced here by forcing get_the_excerpt() from inside a tile. */
+
+add_filter( 'the_content', [ 'MII_Results', 'append_to_page' ], 20 );
+$wpdb->update( 'wp_posts', [ 'post_excerpt' => '' ], [ 'ID' => 101 ] );
+$calls = 0;
+add_filter( 'mavo_image_tile_excerpt', static function ( $text, $post_id ) use ( &$calls ) {
+	if ( ++$calls > 50 ) {
+		throw new RuntimeException( 'runaway recursion' );
+	}
+	get_the_excerpt( get_post( $post_id ) );  // what the old code did
+	return $text;
+}, 10, 2 );
+visit( 50, 'eaux-turquoise' );
+try {
+	$page = MII_Results::append_to_page( '<p>Intro</p>' );
+	same( 'the grid is rendered exactly once', 1, substr_count( $page, 'mavo-image-results__grid' ) );
+} catch ( RuntimeException $e ) {
+	check( 'no runaway recursion', false, $e->getMessage() );
+}
+check( 'a bounded number of excerpts', $calls <= 10, $calls );
+remove_all_filters( 'mavo_image_tile_excerpt' );
+remove_all_filters( 'the_content' );
 
 same( 'concept counts', [ 'beach' => 2, 'garden' => 1, 'sea' => 1, 'sunset' => 1, 'turquoise_water' => 10 ], ( static function ( $c ) { ksort( $c ); return $c; } )( mavo_image_concept_counts( 'fr' ) ) );
 

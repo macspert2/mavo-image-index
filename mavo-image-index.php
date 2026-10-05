@@ -3,7 +3,7 @@
  * Plugin Name: Mavo Image Index
  * Plugin URI:  https://mamanvoyage.com
  * Description: Shared image-intelligence layer. Indexes multilingual alt text into language-neutral concepts, records where each image is used and in which role, and inherits approximate geography from the posts that use it. Other mavo-* plugins query it through a small procedural API. Its own front end is one cross-link shortcode and the results page that link leads to.
- * Version:     1.1.3
+ * Version:     1.1.4
  * Author:      Mavo
  * Text Domain: mavo-image-index
  * Requires at least: 6.3
@@ -12,7 +12,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'MII_VERSION',     '1.1.3' );
+define( 'MII_VERSION',     '1.1.4' );
 define( 'MII_PLUGIN_DIR',  plugin_dir_path( __FILE__ ) );
 define( 'MII_PLUGIN_URL',  plugin_dir_url( __FILE__ ) );
 define( 'MII_PLUGIN_FILE', __FILE__ );

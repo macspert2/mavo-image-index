@@ -97,6 +97,9 @@ class MII_Results {
 
 	private static ?array $current = null;
 
+	/** True while results are being rendered: see append_to_page(). */
+	private static bool $rendering = false;
+
 	public static function init(): void {
 		add_shortcode( self::TAG, [ __CLASS__, 'shortcode' ] );
 
@@ -524,11 +527,22 @@ class MII_Results {
 
 	/** The configured page renders results even without the shortcode in it. */
 	public static function append_to_page( $content ) {
-		if ( ! in_the_loop() || ! is_main_query() || ! self::current() || has_shortcode( (string) $content, self::TAG ) ) {
+		// Never while results are rendering. Anything inside a tile that runs
+		// the_content — WordPress generating an excerpt did, before excerpt()
+		// stopped asking it — would otherwise append the whole grid again,
+		// each copy needing excerpts of its own: /images/fleurs/ exhausted
+		// 256 MB that way (2026-10-05).
+		if ( self::$rendering || ! in_the_loop() || ! is_main_query() || ! self::current() || has_shortcode( (string) $content, self::TAG ) ) {
 			return $content;
 		}
 
-		return $content . self::shortcode( [] );
+		self::$rendering = true;
+
+		try {
+			return $content . self::shortcode( [] );
+		} finally {
+			self::$rendering = false;
+		}
 	}
 
 	public static function render_concept( string $concept, string $lang, int $page = 1, int $per_page = self::PER_PAGE, int $place = 0 ): string {
@@ -1115,7 +1129,8 @@ class MII_Results {
 
 	/**
 	 * The line under a tile's title, by mavo-for-you's rule for its cards
-	 * (MFY_Data::description(), private there, so restated): a post's excerpt;
+	 * (MFY_Data::description(), private there, so restated) — except that a
+	 * missing excerpt is made here, not by get_the_excerpt(): a post's excerpt;
 	 * for a page — whose "excerpt" is trimmed body, often shortcode debris —
 	 * its Yoast meta description first. Cut at 130 characters on a word, as
 	 * those cards are, so both kinds of tile read the same.
@@ -1135,10 +1150,20 @@ class MII_Results {
 			return str_contains( $value, '%%' ) ? '' : $clean( $value );
 		};
 
+		// Not get_the_excerpt(): for an article without a written excerpt it
+		// runs the whole the_content pipeline — every content filter on the
+		// site, once per tile — and that re-entered this page's own filter
+		// (see append_to_page()). The written excerpt, else the opening words.
+		$excerpt = static function () use ( $post, $clean ): string {
+			$written = $clean( (string) $post->post_excerpt );
+
+			return '' !== $written ? $written : $clean( wp_trim_words( strip_shortcodes( (string) $post->post_content ), 40, '' ) );
+		};
+
 		if ( 'page' === $post->post_type ) {
-			$text = $meta() ?: $clean( (string) get_the_excerpt( $post ) );
+			$text = $meta() ?: $excerpt();
 		} else {
-			$text = $clean( (string) get_the_excerpt( $post ) ) ?: $meta();
+			$text = $excerpt() ?: $meta();
 		}
 
 		$text = (string) apply_filters( 'mavo_image_tile_excerpt', $text, $post_id );
