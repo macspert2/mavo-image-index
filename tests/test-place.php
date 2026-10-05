@@ -148,7 +148,7 @@ same( 'current knows the place', 700, MII_Results::current()['place'] );
 
 $html = MII_Results::shortcode( [] );
 check( 'heading names the place', str_contains( $html, '<h2 class="mavo-image-results__title">Madère : Montagne</h2>' ), $html );
-check( 'every photo of the place, the count the gallery tile announced', str_contains( $html, '<p class="mavo-image-results__count">6 photos</p>' ), $html );
+check( 'every photo of the place, the count the gallery tile announced', str_contains( $html, '<p class="mavo-image-results__count">2 articles · 6 photos</p>' ), $html );
 preg_match_all( '#mv-tile__link" href="https://example.test/\?p=(\d+)"#', $html, $links );
 same( 'only the place’s articles', [ '101', '102' ], ( static function ( $l ) { $l = array_values( array_unique( $l ) ); sort( $l ); return $l; } )( $links[1] ) );
 check( 'link to the topic everywhere', str_contains( $html, '<a class="mv-badge mv-badge--neutral" href="https://example.test/images/montagne/">Montagne : toutes les destinations</a>' ), $html );

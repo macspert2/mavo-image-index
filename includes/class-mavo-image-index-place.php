@@ -261,16 +261,21 @@ class MII_Place {
 				continue;
 			}
 
-			// Exactly the tiles the topic × place page will show, so the count
-			// on this tile is the count there; the face is the first of them
-			// not already the face of another topic.
-			$refs  = MII_Results::tile_refs( $concept, $lang, MII_Results::PLACE_PER_ARTICLE, $places );
-			$photo = null;
+			// Exactly what the topic × place page will show, so the count on
+			// this tile is the count there; the face is its first article's
+			// main photo, unless another topic already uses that photo.
+			$grid   = MII_Results::grid_articles( $concept, $lang, $places );
+			$photo  = null;
+			$count  = 0;
 
-			foreach ( $refs as $ref ) {
-				if ( ! isset( $used[ $ref['attachment_id'] ] ) ) {
-					$photo = [ $ref['attachment_id'], $ref['post_id'] ];
-					break;
+			foreach ( $grid as $article ) {
+				$count += count( $article['photos'] );
+
+				foreach ( $photo ? [] : $article['photos'] as $id ) {
+					if ( ! isset( $used[ $id ] ) ) {
+						$photo = [ $id, $article['post_id'] ];
+						break;
+					}
 				}
 			}
 
@@ -283,7 +288,7 @@ class MII_Place {
 			$topics[]          = [
 				'concept'       => $concept,
 				'label'         => MII_Concepts::label( $concept, $lang ),
-				'photos'        => count( $refs ),
+				'photos'        => $count,
 				'lift'          => round( $c['lift'], 2 ),
 				'attachment_id' => $photo[0],
 				'post_id'       => $photo[1],

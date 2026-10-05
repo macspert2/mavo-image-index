@@ -134,9 +134,9 @@ an overlay or a separate consumer plugin.
 - Slugs are labels transliterated the German way (ü → ue), independent of the
   request locale; the concept slug itself (`turquoise-water`) is also accepted.
   Unknown slugs are 404s.
-- The grid takes up to 100 matches, keeps at most two per article (one article
-  with fifteen coves must not fill the page), links each image to the article
-  using it in the page's language, and paginates 24 per page. An article's
+- The grid shows one tile per article (since 2026-10-05, see "Grouped
+  tiles" below), links it to the article in the page's language, and
+  paginates 24 articles per page. An article's
   featured image is used only when the article has no other photo of the
   concept, and such fallbacks come last (filter
   `mavo_image_results_featured_fallback` to drop them): on the live
@@ -174,12 +174,27 @@ an overlay or a separate consumer plugin.
   then the newest photo. Featured-only articles still come last. The stats
   table is checked for, not assumed. No photo twice in a row: an article
   whose only photo another article already shows is skipped.
-- The concept grid pages (`/images/eaux-turquoise/`) use the same ranking
-  (2026-10-04): `ranked_articles()` serves both. The grid deals in rounds —
-  every article's best photo, then every second photo — so an article's two
-  photos are not side by side; a photo shared by two articles appears once,
-  under the more popular. Tiles are references until the page is sliced, so
-  only the 24 shown are hydrated.
+- The concept grid pages (`/images/eaux-turquoise/`) use the same ranking:
+  `ranked_articles()` serves rows, grids and place-gallery faces.
+- **Grouped tiles** (user's decision after a mock, 2026-10-05): one tile per
+  article carrying every photo of it that shows the concept
+  (`grid_articles()`). From two photos the theme's 16:10 `.mv-tile__media`
+  becomes a mosaic — main photo large, one/two small, "+N" on the last, an
+  "N photos" pill; small photos are `alt=""`, the main one carries the alt
+  text. From `WIDE_MIN` (4) photos a tile spans two columns (2 × 2 smalls),
+  at most one in `WIDE_EVERY` (6) tiles, decided over the whole list so pages
+  agree; `grid-auto-flow: dense` keeps rows full; on phones a wide tile is
+  one column again. A photo used by two articles appears once, under the
+  first; an article left with none is dropped. Only the page's articles are
+  hydrated (main photo via `MII_Images`, the others' meta primed).
+- **Article order** (same date): popularity and relevance fused by rank
+  (reciprocal rank fusion, k = `FUSION_K` 10). Popularity rank as before
+  (`MII_Popularity`); relevance = log(1 + matching photos) +
+  `SHARE_WEIGHT` (2) × matching ÷ all photos of the article — an article where
+  8 of 15 photos show the concept is about it, one such photo in a 60-photo
+  city guide is not. Featured-only fallbacks still last. Each article carries
+  `n`, `share`, `pop_rank`, `rel_rank`, `score`; filter
+  `mavo_image_results_ranked_articles`.
 - Tile eyebrow (2026-10-04): **"Country, Region"** of the article's place, in
   its language — the city a post is tagged with was too specific. Either alone
   when only one is known; nothing without either. Usage rows store
@@ -234,8 +249,8 @@ each linking to `/images/{topic}/{place}/`.
 - Topic × place pages: a second rewrite rule per results page
   (`…/{topic}/{place-slug}/[n/]`; a place slug never starts with a digit, so
   it cannot be a page number). `RULES_VERSION` forces one flush when the rule
-  set changes. Up to 6 photos per article there (`PLACE_PER_ARTICLE`), and the
-  gallery tile's count is exactly that page's tile count. **noindex, follow**
+  set changes. The same grouped tiles; the gallery tile's photo count is
+  exactly that page's photo count. **noindex, follow**
   (core, Yoast, Rank Math) — topics × places are many and often thin; the
   canonical is the page itself; hreflang uses `pll_get_term()` for the place,
   falling back to the topic page. Links out: the topic everywhere, the place's

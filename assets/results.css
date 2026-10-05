@@ -34,3 +34,27 @@
 	.mavo-image-place__grid { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px 4px .75rem; gap: .9rem; }
 	.mavo-image-place__grid > .mv-tile { flex: 0 0 min(66vw, 230px); scroll-snap-align: start; }
 }
+
+/* Concept grids: one tile per article. With several photos its .mv-tile__media
+   (the theme's 16:10 box, unchanged) becomes a mosaic — main photo large, the
+   others small, "+N" on the last, an "N photos" pill in the theme's badge
+   look. From four photos a tile may span two columns, at the same row height. */
+.mavo-image-mosaic { display: grid; grid-template-columns: 2fr 1fr; gap: 3px; background: var(--mv-color-surface, #fff); }
+.mavo-image-mosaic--2 { grid-template-columns: 3fr 2fr; }
+.mavo-image-mosaic__main,
+.mavo-image-mosaic__cell { position: relative; display: block; min-height: 0; overflow: hidden; }
+.mavo-image-mosaic__side { display: grid; grid-template-rows: repeat(2, 1fr); gap: 3px; min-height: 0; }
+.mavo-image-mosaic--2 .mavo-image-mosaic__side { grid-template-rows: 1fr; }
+.mavo-image-mosaic__img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.mavo-image-mosaic__more { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(var(--mv-color-primary-rgb, 78, 116, 165), .62); color: #fff; font-size: 1.05rem; font-weight: 700; }
+.mavo-image-mosaic__count { position: absolute; top: .6rem; left: .6rem; z-index: 1; padding: .14rem .55rem; border-radius: 999px; background: rgba(255, 255, 255, .92); color: var(--mv-color-primary, #4e74a5); font-size: .74rem; font-weight: 700; }
+@media (min-width: 700px) {
+	.mavo-image-results__grid { grid-auto-flow: dense; }
+	.mavo-image-results__tile--wide { grid-column: span 2; }
+	.mavo-image-results__tile--wide .mv-tile__media { aspect-ratio: 33 / 10; }
+	.mavo-image-mosaic--wide { grid-template-columns: 3fr 2fr; }
+	.mavo-image-mosaic--wide .mavo-image-mosaic__side { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 699px) {
+	.mavo-image-mosaic--wide .mavo-image-mosaic__cell:nth-child(n+3) { display: none; }
+}

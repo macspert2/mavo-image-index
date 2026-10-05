@@ -165,8 +165,6 @@ $GLOBALS['MOCK_EXCERPTS'] = [
 	100 => str_repeat( 'Un mot ', 17 ) . 'dernier mot qui dépasse largement la limite des cent trente caractères',
 ];
 visit( 50, 'eaux-turquoise' );
-$tiles = MII_Results::tiles( 'turquoise_water', 'fr' );
-$per   = array_count_values( array_column( $tiles, 'post_id' ) );
 // Place eyebrow: the image's place in the article it links to.
 // Eyebrow: country and region of the article's place, never the city.
 $GLOBALS['MOCK_CHAINS'][101] = [ [ 'country', 300 ], [ 'region', 301 ] ];
@@ -176,26 +174,52 @@ foreach ( [ 300 => 'Grèce', 301 => 'Milos', 309 => 'Europe', 310 => 'Espagne', 
 }
 MII_Usage::index_posts( [ 101, 103 ] );
 
-same( 'at most two images per article', [ 100 => 2, 101 => 1, 102 => 1, 103 => 1, 105 => 1 ], ( static function ( $a ) { ksort( $a ); return $a; } )( $per ) );
+$grid  = MII_Results::grid_articles( 'turquoise_water', 'fr' );
+$by    = array_column( $grid, null, 'post_id' );
+$order = array_column( $grid, 'post_id' );
 
-$order = array_column( $tiles, 'post_id' );
-same( 'featured image never chosen when the article has another match', [ 11 ], array_column( array_column( array_filter( $tiles, static fn( $t ) => 103 === $t['post_id'] ), 'image' ), 'attachment_id' ) );
-same( 'image featured elsewhere links to the article using it in content', 12, array_column( array_column( array_filter( $tiles, static fn( $t ) => 105 === $t['post_id'] ), 'image' ), 'attachment_id' )[0] ?? null );
-$first = array_values( array_unique( $order ) );
-same( 'featured-only article falls back, last of the first round', 102, end( $first ) );
-same( 'featured fallback is its featured image', 7, array_values( array_filter( $tiles, static fn( $t ) => 102 === $t['post_id'] ) )[0]['image']['attachment_id'] );
-same( 'rounds: every article once before any article twice', $first, array_slice( $order, 0, count( $first ) ) );
-same( 'a photo featured-only here but inline elsewhere appears once, under the inline article', 1,
-	count( array_filter( $tiles, static fn( $t ) => 12 === $t['image']['attachment_id'] ) ) );
+same( 'one tile per article', [ 100, 101, 102, 103, 105 ], ( static function ( $o ) { sort( $o ); return $o; } )( $order ) );
+same( 'every matching photo of the article on its tile', 5, count( $by[100]['photos'] ) );
+check( 'four or more photos: a wide tile', $by[100]['wide'] );
+check( 'one photo: not wide', ! $by[101]['wide'] );
+same( 'featured image never chosen when the article has another match', [ 11 ], $by[103]['photos'] );
+same( 'image featured elsewhere links to the article using it in content', [ 12 ], $by[105]['photos'] );
+check( 'an article whose only photo another article shows is dropped', ! isset( $by[104] ) );
+same( 'featured-only article falls back, last', 102, end( $order ) );
+same( 'featured fallback is its featured image', [ 7 ], $by[102]['photos'] );
 
 add_filter( 'mavo_image_results_featured_fallback', static fn() => false );
-check( 'fallback can be switched off', ! in_array( 102, array_column( MII_Results::tiles( 'turquoise_water', 'fr' ), 'post_id' ), true ) );
+check( 'fallback can be switched off', ! in_array( 102, array_column( MII_Results::grid_articles( 'turquoise_water', 'fr' ), 'post_id' ), true ) );
 remove_all_filters( 'mavo_image_results_featured_fallback' );
+
+// Wide tiles: at most one in WIDE_EVERY, decided over the whole list.
+add_filter( 'mavo_image_results_ranked_articles', static function ( $articles ) {
+	$fake = [];
+	foreach ( range( 1, 14 ) as $i ) {
+		$fake[ 9000 + $i ] = [ 'photos' => range( 9000 + $i * 10, 9000 + $i * 10 + 4 ), 'fallback' => false ];
+	}
+	return $fake;
+} );
+$wides = array_keys( array_filter( array_column( MII_Results::grid_articles( 'beach', 'fr' ), 'wide' ) ) );
+same( 'wide tiles spaced', [ 0, MII_Results::WIDE_EVERY, 2 * MII_Results::WIDE_EVERY ], $wides );
+remove_all_filters( 'mavo_image_results_ranked_articles' );
+
+$mosaic = new ReflectionMethod( 'MII_Results', 'mosaic' );
+$narrow = $mosaic->invoke( null, '<img>', [ 1, 2, 3, 4, 5 ], false, 'fr' );
+same( 'normal tile: main + two small', 2, substr_count( $narrow, 'mavo-image-mosaic__cell' ) );
+check( '"+N" on the last small photo', str_contains( $narrow, '<span class="mavo-image-mosaic__more" aria-hidden="true">+2</span>' ), $narrow );
+check( 'count pill', str_contains( $narrow, '<span class="mavo-image-mosaic__count">5 photos</span>' ) );
+check( 'small photos are decorative', ! preg_match( '#mavo-image-mosaic__img"[^>]*alt="[^"]#', $narrow ) );
+$two = $mosaic->invoke( null, '<img>', [ 1, 2 ], false, 'fr' );
+check( 'two photos: main + one, no "+N"', 1 === substr_count( $two, 'mavo-image-mosaic__cell' ) && ! str_contains( $two, '__more' ) && str_contains( $two, 'mavo-image-mosaic--2' ) );
+$wide = $mosaic->invoke( null, '<img>', [ 1, 2, 3, 4, 5, 6, 7 ], true, 'fr' );
+check( 'wide: main + four, "+2"', 4 === substr_count( $wide, 'mavo-image-mosaic__cell' ) && str_contains( $wide, '>+2</span>' ) && str_contains( $wide, 'mavo-image-mosaic--wide' ) );
 
 $html = MII_Results::shortcode( [] );
 check( 'heading', str_contains( $html, '<h2 class="mavo-image-results__title">Eaux turquoise</h2>' ), $html );
-check( 'count', str_contains( $html, '6 photos' ) );
-same( 'tiles', 6, substr_count( $html, 'class="mv-tile mv-tile--media mavo-image-results__tile"' ) );
+check( 'count: articles and photos', str_contains( $html, '<p class="mavo-image-results__count">5 articles · 9 photos</p>' ), $html );
+same( 'tiles', 5, substr_count( $html, 'class="mv-tile mv-tile--media mavo-image-results__tile' ) );
+check( 'the rich article is wide and a mosaic', str_contains( $html, '<div class="mv-tile mv-tile--media mavo-image-results__tile mavo-image-results__tile--wide" data-post-id="100"><span class="mv-tile__media mavo-image-mosaic mavo-image-mosaic--wide">' ), $html );
 check( 'theme grid', str_contains( $html, '<div class="mv-tile-grid mv-grid mv-grid--3 mavo-image-results__grid">' ) );
 check( 'theme tile anatomy', str_contains( $html, '<span class="mv-tile__media"><img class="mv-tile__img" src="https://example.test/wp-content/uploads/6-medium_large.jpg" alt="Eaux turquoise à Milos" loading="lazy" decoding="async"></span>' ), $html );
 check( 'stretched link to the article', str_contains( $html, '<span class="mv-tile__title"><a class="mv-tile__link" href="https://example.test/?p=101">Article 101</a></span>' ), $html );
@@ -224,12 +248,12 @@ check( 'pagination', str_contains( $html, 'Page 1 sur 2' ) && str_contains( $htm
 
 visit( 50, 'eaux-turquoise', 2 );
 $html = MII_Results::shortcode( [ 'per_page' => 3 ] );
-same( 'page 2 tiles', 3, substr_count( $html, 'mavo-image-results__tile' ) );
+same( 'page 2 tiles', 2, substr_count( $html, 'class="mv-tile mv-tile--media mavo-image-results__tile' ) );
 check( 'previous link', str_contains( $html, 'href="https://example.test/images/eaux-turquoise/">← Page précédente' ) );
 
 visit( 51, 'turquoise-water', 0, 'en' );
 $html = MII_Results::shortcode( [] );
-check( 'English page shows English usages only', str_contains( $html, '1 photo' ) && str_contains( $html, 'Article 110' ), $html );
+check( 'English page shows English usages only', str_contains( $html, '1 article · 1 photo' ) && str_contains( $html, 'Article 110' ), $html );
 check( 'English alt', str_contains( $html, 'alt="Turquoise water 1"' ) );
 
 visit( 50 );
@@ -309,7 +333,7 @@ remove_all_filters( 'mavo_image_results_row_min' );
 visit( 50, 'eaux-turquoise' );
 $concept = MII_Results::shortcode( [] );
 preg_match_all( '#mv-tile__link" href="https://example.test/\?p=(\d+)"#', $concept, $grid );
-check( 'concept pages still show several photos of one article', count( $grid[1] ) > count( array_unique( $grid[1] ) ), implode( ',', $grid[1] ) );
+check( 'concept pages show several photos of one article, in one mosaic', str_contains( $concept, 'mavo-image-mosaic' ) && count( $grid[1] ) === count( array_unique( $grid[1] ) ), implode( ',', $grid[1] ) );
 visit( 50 );
 
 /* ---- popularity: same month last year, summed over translations ---- */
@@ -336,10 +360,13 @@ mii_meta( 100, 'views', 7 );
 same( 'popularity', [ 100 => [ 'season' => 0, 'recent' => 7 ], 101 => [ 'season' => 50, 'recent' => 0 ], 103 => [ 'season' => 80, 'recent' => 0 ] ],
 	array_intersect_key( MII_Popularity::for_posts( [ 100, 101, 103 ] ), [ 100 => 1, 101 => 1, 103 => 1 ] ) );
 
-same( 'rows ordered by last year’s views, then recent views; featured-only last',
-	[ 103, 101, 105, 100 ], array_slice( array_column( MII_Results::row_tiles( 'turquoise_water', 'fr' ), 'post_id' ), 0, 4 ) );
+// Popularity ranks 103, 101, 105, 100; relevance ranks 100 (5 of its 5
+// photos), 105 (1 of 1), 103, 101 (1 of 2 each). Fused (k = 10): 100 climbs
+// from fourth to second — fewest views, but entirely about turquoise water.
+same( 'rows: popularity and relevance fused; featured-only last',
+	[ 103, 100, 105, 101 ], array_slice( array_column( MII_Results::row_tiles( 'turquoise_water', 'fr' ), 'post_id' ), 0, 4 ) );
 same( 'limit', 2, count( MII_Results::row_tiles( 'turquoise_water', 'fr', 2 ) ) );
-$grid_first = array_values( array_unique( array_column( MII_Results::tile_refs( 'turquoise_water', 'fr' ), 'post_id' ) ) );
+$grid_first = array_column( MII_Results::grid_articles( 'turquoise_water', 'fr' ), 'post_id' );
 same( 'concept grid: same popularity order as the rows', array_column( MII_Results::row_tiles( 'turquoise_water', 'fr' ), 'post_id' ), $grid_first );
 same( 'too few articles: no row', [], MII_Results::row_tiles( 'garden', 'fr', 12, 2 ) );
 $wpdb->pdo->exec( 'DROP TABLE wp_rpp_monthly_snapshots' );

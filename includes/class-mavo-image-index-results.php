@@ -50,13 +50,21 @@ class MII_Results {
 	const ROWS_OPTION  = 'mavo_image_index_browse_rows';
 
 	const PER_PAGE     = 24;
-	const PER_ARTICLE  = 2;
-
 	/**
-	 * On a topic × place page: a place has few articles, so each may show
-	 * more of its photos (still dealt in rounds, one per article at a time).
+	 * Article order: popularity and relevance, fused by rank (reciprocal rank
+	 * fusion, k = FUSION_K) — robust to their very different scales. Relevance
+	 * is log(1 + matching photos) + SHARE_WEIGHT × (matching ÷ all photos of
+	 * the article): an article where 8 of 15 photos show turquoise water is
+	 * about turquoise water; one such photo in a 60-photo city guide is not.
 	 */
-	const PLACE_PER_ARTICLE = 6;
+	const FUSION_K     = 10;
+	const SHARE_WEIGHT = 2.0;
+
+	/** A grid article with this many photos gets a double-width tile… */
+	const WIDE_MIN     = 4;
+
+	/** …at most one in this many tiles. */
+	const WIDE_EVERY   = 6;
 
 	/** A browse row: up to this many articles… */
 	const ROW_TILES    = 12;
@@ -68,6 +76,8 @@ class MII_Results {
 	const TEXT = [
 		'count'    => [ 'fr' => '%d photos', 'en' => '%d photos', 'de' => '%d Fotos' ],
 		'one'      => [ 'fr' => '1 photo', 'en' => '1 photo', 'de' => '1 Foto' ],
+		'articles' => [ 'fr' => '%d articles', 'en' => '%d articles', 'de' => '%d Artikel' ],
+		'article'  => [ 'fr' => '1 article', 'en' => '1 article', 'de' => '1 Artikel' ],
 		'unit'     => [ 'fr' => 'photos', 'en' => 'photos', 'de' => 'Fotos' ],
 		'unit_one' => [ 'fr' => 'photo', 'en' => 'photo', 'de' => 'Foto' ],
 		'from'     => [ 'fr' => 'Article :', 'en' => 'From:', 'de' => 'Artikel:' ],
@@ -522,20 +532,23 @@ class MII_Results {
 	}
 
 	public static function render_concept( string $concept, string $lang, int $page = 1, int $per_page = self::PER_PAGE, int $place = 0 ): string {
-		// Every tile as a reference, so the count and pagination are exact;
-		// only this page's photos are loaded in full.
-		$refs  = $place
-			? self::tile_refs( $concept, $lang, self::PLACE_PER_ARTICLE, MII_Place::terms( $place ) )
-			: self::tile_refs( $concept, $lang );
-		$total = count( $refs );
-		$pages = max( 1, (int) ceil( $total / $per_page ) );
-		$page  = min( max( 1, $page ), $pages );
-		$tiles = self::hydrate( array_slice( $refs, ( $page - 1 ) * $per_page, $per_page ), $lang );
+		// Every article as a reference, so counts and pagination are exact;
+		// only this page's articles are loaded in full.
+		$all    = self::grid_articles( $concept, $lang, $place ? MII_Place::terms( $place ) : [] );
+		$total  = count( $all );
+		$photos = array_sum( array_map( static fn( $a ) => count( $a['photos'] ), $all ) );
+		$pages  = max( 1, (int) ceil( $total / $per_page ) );
+		$page   = min( max( 1, $page ), $pages );
+		$tiles  = self::hydrate_articles( array_slice( $all, ( $page - 1 ) * $per_page, $per_page ), $lang );
 		$label = self::heading( $concept, $lang, $place );
 
 		$out  = '<div class="mavo-image-results mavo-image-results--' . esc_attr( str_replace( '_', '-', $concept ) ) . ( $place ? ' mavo-image-results--place' : '' ) . '">';
 		$out .= '<h2 class="mavo-image-results__title">' . esc_html( $label ) . '</h2>';
-		$out .= '<p class="mavo-image-results__count">' . esc_html( 1 === $total ? self::text( 'one', $lang ) : sprintf( self::text( 'count', $lang ), $total ) ) . '</p>';
+		$out .= '<p class="mavo-image-results__count">' . esc_html(
+			( 1 === $total ? self::text( 'article', $lang ) : sprintf( self::text( 'articles', $lang ), $total ) )
+			. ' · '
+			. ( 1 === $photos ? self::text( 'one', $lang ) : sprintf( self::text( 'count', $lang ), $photos ) )
+		) . '</p>';
 
 		if ( ! $tiles ) {
 			$out .= '<p class="mavo-image-results__empty">' . esc_html( self::text( 'empty', $lang ) ) . '</p>';
@@ -544,7 +557,7 @@ class MII_Results {
 			$out .= '<div class="mv-tile-grid mv-grid mv-grid--3 mavo-image-results__grid">';
 
 			foreach ( $tiles as $tile ) {
-				$out .= self::render_tile( $tile, $lang );
+				$out .= self::render_tile( $tile, $lang, $tile['photos'], $tile['wide'] );
 			}
 
 			$out .= '</div>';
@@ -783,14 +796,71 @@ class MII_Results {
 			$articles[ $post_id ] = [ 'photos' => array_column( $list, 1 ), 'fallback' => $is_fallback ];
 		}
 
-		$pop = MII_Popularity::for_posts( array_keys( $articles ) );
+		if ( ! $articles ) {
+			return [];
+		}
 
-		uksort( $articles, static function ( $a, $b ) use ( $articles, $pop ) {
-			return [ (int) $articles[ $a ]['fallback'], -( $pop[ $a ]['season'] ?? 0 ), -( $pop[ $a ]['recent'] ?? 0 ), -$articles[ $a ]['photos'][0] ]
-				<=> [ (int) $articles[ $b ]['fallback'], -( $pop[ $b ]['season'] ?? 0 ), -( $pop[ $b ]['recent'] ?? 0 ), -$articles[ $b ]['photos'][0] ];
-		} );
+		$pop    = MII_Popularity::for_posts( array_keys( $articles ) );
+		$totals = self::photo_totals( array_keys( $articles ) );
 
-		return $articles;
+		// Popularity rank: last year's views, then recent views, then newest photo.
+		$by_pop = array_keys( $articles );
+		usort( $by_pop, static fn( $a, $b ) =>
+			[ -( $pop[ $a ]['season'] ?? 0 ), -( $pop[ $a ]['recent'] ?? 0 ), -$articles[ $a ]['photos'][0] ]
+			<=> [ -( $pop[ $b ]['season'] ?? 0 ), -( $pop[ $b ]['recent'] ?? 0 ), -$articles[ $b ]['photos'][0] ] );
+
+		foreach ( $by_pop as $i => $post_id ) {
+			$n     = count( $articles[ $post_id ]['photos'] );
+			$share = $n / max( $n, (int) ( $totals[ $post_id ] ?? 0 ) );
+
+			$articles[ $post_id ] += [
+				'n'         => $n,
+				'share'     => round( $share, 3 ),
+				'relevance' => log( 1 + $n ) + self::SHARE_WEIGHT * $share,
+				'pop_rank'  => $i + 1,
+			];
+		}
+
+		// Relevance rank, ties to the more popular.
+		$by_rel = array_keys( $articles );
+		usort( $by_rel, static fn( $a, $b ) =>
+			[ -$articles[ $a ]['relevance'], $articles[ $a ]['pop_rank'] ] <=> [ -$articles[ $b ]['relevance'], $articles[ $b ]['pop_rank'] ] );
+
+		foreach ( $by_rel as $i => $post_id ) {
+			$articles[ $post_id ]['rel_rank'] = $i + 1;
+			$articles[ $post_id ]['score']    = 1 / ( self::FUSION_K + $articles[ $post_id ]['pop_rank'] ) + 1 / ( self::FUSION_K + $i + 1 );
+		}
+
+		// Featured-only fallbacks last; then the fused score.
+		uksort( $articles, static fn( $a, $b ) =>
+			[ (int) $articles[ $a ]['fallback'], -$articles[ $a ]['score'], $articles[ $a ]['pop_rank'] ]
+			<=> [ (int) $articles[ $b ]['fallback'], -$articles[ $b ]['score'], $articles[ $b ]['pop_rank'] ] );
+
+		/** Articles for a concept, in order, with photos, n, share, ranks and score. */
+		return (array) apply_filters( 'mavo_image_results_ranked_articles', $articles, $concept, $lang );
+	}
+
+	/**
+	 * How many photos each article uses, whatever they show — the denominator
+	 * of relevance's share. One grouped query.
+	 *
+	 * @param int[] $post_ids
+	 * @return array<int,int>
+	 */
+	private static function photo_totals( array $post_ids ): array {
+		global $wpdb;
+
+		$out = [];
+
+		foreach ( (array) $wpdb->get_results(
+			'SELECT post_id, COUNT(DISTINCT attachment_id) AS n FROM ' . MII_DB::usage() . '
+			  WHERE post_id IN (' . MII_DB::in_ints( $post_ids ) . ') GROUP BY post_id',
+			ARRAY_A
+		) as $row ) {
+			$out[ (int) $row['post_id'] ] = (int) $row['n'];
+		}
+
+		return $out;
 	}
 
 	/**
@@ -803,7 +873,8 @@ class MII_Results {
 	 *                    class (extra classes on the section)
 	 */
 	public static function concept_row( string $concept, string $lang, array $args = [] ): string {
-		if ( ! isset( MII_Concepts::all()[ $concept ] ) ) {
+		// Private concepts (family, children) never get a public row.
+		if ( ! MII_Concepts::is_public( $concept ) ) {
 			return '';
 		}
 
@@ -880,44 +951,66 @@ class MII_Results {
 	}
 
 	/**
-	 * The concept grid's tiles, as references: up to $per_article photos per
-	 * article, in the same popularity order as the browse rows.
+	 * The concept grid: one tile per article, carrying every photo of it that
+	 * shows the concept — a mosaic from two photos, a double-width tile from
+	 * WIDE_MIN (at most one in WIDE_EVERY tiles, decided over the whole list
+	 * so pages agree). A photo used in several articles appears once, under
+	 * the first; an article left with no photo of its own is dropped.
 	 *
-	 * Dealt in rounds — every article's best photo first, then every second
-	 * photo — so one article's photos are not side by side and the first
-	 * pages show as many different articles as possible. A photo used in two
-	 * articles appears once, under the more popular one.
-	 *
-	 * @return array<int,array{attachment_id:int,post_id:int}>
+	 * @param int[] $places Only articles placed there (MII_Place::terms()).
+	 * @return array<int,array{post_id:int,photos:int[],wide:bool}>
 	 */
-	public static function tile_refs( string $concept, string $lang, int $per_article = self::PER_ARTICLE, array $places = [] ): array {
-		$articles = self::ranked_articles( $concept, $lang, [], $places );
-		$refs     = [];
-		$used     = []; // attachment_id => post_id it is shown under
+	public static function grid_articles( string $concept, string $lang, array $places = [] ): array {
+		$out    = [];
+		$used   = [];
+		$budget = 0;
 
-		for ( $round = 0; $round < max( 1, $per_article ); $round++ ) {
-			foreach ( $articles as $post_id => $article ) {
-				$mine = array_values( array_filter(
-					$article['photos'],
-					static fn( $id ) => ! isset( $used[ $id ] ) || $used[ $id ] === $post_id
-				) );
-				$id   = $mine[ $round ] ?? null;
+		foreach ( self::ranked_articles( $concept, $lang, [], $places ) as $post_id => $article ) {
+			$photos = array_values( array_filter( $article['photos'], static fn( $id ) => ! isset( $used[ $id ] ) ) );
 
-				if ( null === $id || isset( $used[ $id ] ) ) {
-					continue;
-				}
+			if ( ! $photos ) {
+				continue;
+			}
 
-				$used[ $id ] = $post_id;
-				$refs[]      = [ 'attachment_id' => $id, 'post_id' => $post_id ];
+			foreach ( $photos as $id ) {
+				$used[ $id ] = true;
+			}
+
+			$wide   = count( $photos ) >= self::WIDE_MIN && $budget <= 0;
+			$budget = $wide ? self::WIDE_EVERY - 1 : $budget - 1;
+
+			$out[] = [ 'post_id' => (int) $post_id, 'photos' => $photos, 'wide' => $wide ];
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Grid articles with their main photo hydrated (alt text, place), every
+	 * other photo's meta primed for its URL — a fixed number of queries.
+	 *
+	 * @return array<int,array{post_id:int,photos:int[],wide:bool,image:array}>
+	 */
+	private static function hydrate_articles( array $articles, string $lang ): array {
+		if ( ! $articles ) {
+			return [];
+		}
+
+		$main   = array_map( static fn( $a ) => $a['photos'][0], $articles );
+		$images = MII_Images::get_many( $main, [ 'lang' => $lang ] );
+
+		update_meta_cache( 'post', array_merge( [], ...array_column( $articles, 'photos' ) ) );
+		_prime_post_caches( array_column( $articles, 'post_id' ), false, false );
+
+		$out = [];
+
+		foreach ( $articles as $article ) {
+			if ( isset( $images[ $article['photos'][0] ] ) ) {
+				$out[] = $article + [ 'image' => $images[ $article['photos'][0] ] ];
 			}
 		}
 
-		return $refs;
-	}
-
-	/** The concept grid's tiles, hydrated. */
-	public static function tiles( string $concept, string $lang, int $per_article = self::PER_ARTICLE ): array {
-		return self::hydrate( self::tile_refs( $concept, $lang, $per_article ), $lang );
+		return $out;
 	}
 
 	/**
@@ -984,7 +1077,7 @@ class MII_Results {
 	 * <img>: here the photo is the subject, not decoration, and with the
 	 * excerpt shown nothing else says what it depicts.
 	 */
-	private static function render_tile( array $tile, string $lang ): string {
+	private static function render_tile( array $tile, string $lang, array $photos = [], bool $wide = false ): string {
 		$image   = $tile['image'];
 		$post_id = $tile['post_id'];
 		$src     = (string) wp_get_attachment_image_url( $image['attachment_id'], 'medium_large' );
@@ -994,11 +1087,14 @@ class MII_Results {
 		}
 
 		$place = self::eyebrow( $image, $post_id, $lang );
+		$main  = '<img class="mv-tile__img" src="' . esc_url( $src ) . '" alt="' . esc_attr( (string) $image['alt_text'] ) . '" loading="lazy" decoding="async">';
+		$n     = max( 1, count( $photos ) );
+		$class = 'mv-tile mv-tile--media mavo-image-results__tile' . ( $wide ? ' mavo-image-results__tile--wide' : '' );
 
 		// data-post-id: which article the tile leads to, for click counting
 		// (mavo-search counts photo-row clicks on its search page).
-		$html = '<div class="mv-tile mv-tile--media mavo-image-results__tile" data-post-id="' . (int) $post_id . '">'
-			. '<span class="mv-tile__media"><img class="mv-tile__img" src="' . esc_url( $src ) . '" alt="' . esc_attr( (string) $image['alt_text'] ) . '" loading="lazy" decoding="async"></span>'
+		$html = '<div class="' . $class . '" data-post-id="' . (int) $post_id . '">'
+			. ( $n > 1 ? self::mosaic( $main, $photos, $wide, $lang ) : '<span class="mv-tile__media">' . $main . '</span>' )
 			. '<span class="mv-tile__body">';
 
 		if ( '' !== $place ) {
@@ -1055,6 +1151,41 @@ class MII_Results {
 		$space = mb_strrpos( $cut, ' ' );
 
 		return ( $space > 40 ? mb_substr( $cut, 0, $space ) : $cut ) . '…';
+	}
+
+	/**
+	 * A tile's photo area as a mosaic: the main photo large, then one small
+	 * (two photos), two (three or more) or four (a wide tile), the last
+	 * marked "+N" when more remain, and an "N photos" pill. Still the theme's
+	 * .mv-tile__media box, so the tile keeps its shape; the small photos are
+	 * decorative (alt="") — the main one carries the alt text, the tile is one
+	 * link, and a screen reader should not hear five descriptions per tile.
+	 */
+	private static function mosaic( string $main, array $photos, bool $wide, string $lang ): string {
+		$n      = count( $photos );
+		$smalls = array_slice( $photos, 1, $wide ? 4 : ( $n >= 3 ? 2 : 1 ) );
+		$more   = $n - 1 - count( $smalls );
+		$cells  = '';
+
+		foreach ( array_values( $smalls ) as $i => $id ) {
+			$url = (string) wp_get_attachment_image_url( (int) $id, 'medium' );
+
+			if ( '' === $url ) {
+				continue;
+			}
+
+			$cells .= '<span class="mavo-image-mosaic__cell"><img class="mavo-image-mosaic__img" src="' . esc_url( $url ) . '" alt="" loading="lazy" decoding="async">'
+				. ( $more > 0 && $i === count( $smalls ) - 1 ? '<span class="mavo-image-mosaic__more" aria-hidden="true">+' . (int) $more . '</span>' : '' )
+				. '</span>';
+		}
+
+		$kind = $wide ? 'wide' : ( $n >= 3 ? '3' : '2' );
+
+		return '<span class="mv-tile__media mavo-image-mosaic mavo-image-mosaic--' . $kind . '">'
+			. '<span class="mavo-image-mosaic__main">' . $main . '</span>'
+			. '<span class="mavo-image-mosaic__side">' . $cells . '</span>'
+			. '<span class="mavo-image-mosaic__count">' . esc_html( sprintf( self::text( 'count', $lang ), $n ) ) . '</span>'
+			. '</span>';
 	}
 
 	private static function render_pagination( string $concept, string $lang, int $page, int $pages, int $place = 0 ): string {
