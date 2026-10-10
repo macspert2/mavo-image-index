@@ -235,6 +235,9 @@ renames those classes, this follows; without it the line is unstyled.
 four of the theme's overlay tiles, one per *distinctive* topic of a place,
 each linking to `/images/{topic}/{place}/`.
 
+- **Automatic insertion switched off 2026-10-10** at the user's request (the
+  hook line in `MII_Place::init()` is commented out, code kept); the shortcode
+  and the topic × place pages still work.
 - Inserted on tag archives through GeneratePress's `generate_before_loop`
   (`archive.php` fires it with `'archive'`), because tag archives run no
   shortcodes; not on page 2+. `[mavo_image_place place="madere"]` elsewhere

@@ -51,7 +51,12 @@ class MII_Place {
 
 	public static function init(): void {
 		add_shortcode( self::TAG, [ __CLASS__, 'shortcode' ] );
-		add_action( 'generate_before_loop', [ __CLASS__, 'auto_insert' ] );
+		// Switched off at the user's request (2026-10-10): the gallery row is
+		// not to appear on tag archives for now. Everything else is intact —
+		// auto_insert(), the topic ranking, the [mavo_image_place] shortcode
+		// and the topic × place pages the tiles link to — so turning it back
+		// on is uncommenting this line.
+		// add_action( 'generate_before_loop', [ __CLASS__, 'auto_insert' ] );
 	}
 
 	/**
